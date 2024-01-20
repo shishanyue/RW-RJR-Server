@@ -409,8 +409,12 @@ pub async fn relay_packet_sender(room: Arc<RwLock<RelayRoom>>, mut packet: Packe
 
     let target_con_sender = room.write().await.get_con_sender(target).unwrap();
 
-    packet_type == PacketType::KICK as u32;
+    if packet_type == PacketType::KICK as u32{
 
-    packet_type == PacketType::START_GAME as u32;
+    }
+    if packet_type == PacketType::START_GAME as u32{
+        
+    }
+    
     target_con_sender.send(send_packet).await.unwrap();
 }
