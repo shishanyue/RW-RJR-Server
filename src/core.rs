@@ -337,7 +337,7 @@ impl RelayManage {
         let (relay_add_con_sender, mut relay_add_con_receiver) = mpsc::channel(10);
         let (relay_group_packet_sender, mut relay_group_packet_receiver) = mpsc::channel(10);
 
-        let id = if id.is_some() {
+        let id = if let Some(..) = id {
             self.id_rand.gen_range(100..9999).to_string()
         } else {
             id.unwrap()
@@ -415,6 +415,6 @@ pub async fn relay_packet_sender(room: Arc<RwLock<RelayRoom>>, mut packet: Packe
     if packet_type == PacketType::START_GAME as u32{
         
     }
-    
+
     target_con_sender.send(send_packet).await.unwrap();
 }
