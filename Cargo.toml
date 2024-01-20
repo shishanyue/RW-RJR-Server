@@ -1,0 +1,32 @@
+[package]
+name = "rws_rjr"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.8.5"
+toml = "0.8.8"
+tokio = { version = "1.35.1",features = ["full"]}
+serde = "1.0.195"
+serde_derive = "1.0.195"
+sha256 = "1.5.0"
+fern = "0.6.2"
+log = "0.4.20"
+thiserror = "1.0.56"
+anyhow = "1.0.79"
+humantime = "2.1.0"
+num_enum = "0.7.2"
+bytes = "1.5.0"
+num-bigint = "0.4.4"
+dashmap = "5.5.3"
+
+
+[dependencies.uuid]
+version = "1.7.0"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
