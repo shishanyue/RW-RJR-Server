@@ -337,10 +337,10 @@ impl RelayManage {
         let (relay_add_con_sender, mut relay_add_con_receiver) = mpsc::channel(10);
         let (relay_group_packet_sender, mut relay_group_packet_receiver) = mpsc::channel(10);
 
-        let id = if let Some(..) = id {
-            self.id_rand.gen_range(100..9999).to_string()
+        let id = if let Some(id) = id {
+            id
         } else {
-            id.unwrap()
+            self.id_rand.gen_range(100..9999).to_string()
         };
 
         let relay_room = RelayRoom::new(
