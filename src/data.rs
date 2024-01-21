@@ -6,3 +6,6 @@ pub static START_INFO:&str = "
 ██║  ██║╚███╔███╔╝      ██║  ██║╚█████╔╝██║  ██║
 ╚═╝  ╚═╝ ╚══╝╚══╝       ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝
 ";
+
+
+pub static COMMAND_HELP:&str = "/list player";

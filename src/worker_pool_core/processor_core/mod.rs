@@ -44,7 +44,7 @@ pub async fn init_processor_sorter(processor_rt: BlockRuntime) -> mpsc::Sender<P
                             .await;
                     });
                 }
-                None => todo!(),
+                None => {},
             }
         }
     });
@@ -88,13 +88,13 @@ pub async fn processor(mut data_receiver: mpsc::Receiver<ProcesseorData>) -> any
                                             ))
                                             .await;
                                     }
-                                    _ => todo!(),
+                                    _ => {con_lock.disconnect().await},
                                 },
-                                None => todo!(),
+                                None => {con_lock.disconnect().await},
                             }
                         }
                         PacketType::DISCONNECT => {
-                            con_lock.disconnect().await;
+                            con_lock.disconnect().await
                         }
                         _ => {}
                     },
@@ -104,7 +104,7 @@ pub async fn processor(mut data_receiver: mpsc::Receiver<ProcesseorData>) -> any
                                 con_lock.player_info.clone(),
                                 con_lock.connection_info.clone(),
                             );
-                            con_lock.send_relay_server_type_reply(all_info).await;
+                            con_lock.send_relay_server_type_reply(all_info).await
                         }
                         PacketType::HEART_BEAT => {}
                         _ => {}
@@ -155,7 +155,7 @@ pub async fn processor(mut data_receiver: mpsc::Receiver<ProcesseorData>) -> any
                 };
                 //let a = con.clone().lock().await;
             }
-            None => todo!(),
+            None => {},
         }
     }
 }

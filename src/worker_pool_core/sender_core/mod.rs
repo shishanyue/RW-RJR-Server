@@ -7,7 +7,7 @@ use tokio::{
 
 use crate::{
     core::ServerCommand,
-    packet_core::Packet,
+    packet_core::{Packet, PacketType},
 };
 
 pub type SenderData = (
@@ -28,13 +28,14 @@ pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> 
                             Some(mut packet) => {
                                 packet.prepare().await;
                                 //if packet.packet_type!= PacketType::HEART_BEAT || packet.packet_type!= PacketType::TEAM_LIST|| packet.packet_type!= PacketType::HEART_BEAT_RESPONSE {
+                                //println!("{:?}",packet);
                                 //}
                                 write_half
                                     .write_all(&packet.packet_buffer.into_inner())
                                     .await
                                     .unwrap();
                             }
-                            None => todo!(),
+                            None => {},
                         }
                     }
 
@@ -45,7 +46,7 @@ pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> 
                                 ServerCommand::Disconnect => {
                                     break;
                                 },
-                                ServerCommand::None => todo!(),
+                                ServerCommand::None => {},
                             }
                         }
                     }

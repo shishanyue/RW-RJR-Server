@@ -9,7 +9,7 @@ use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
 
 use crate::{
     core::{creat_block_runtime, ConnectionManage, RelayManage},
-    data::START_INFO,
+    data::{COMMAND_HELP, START_INFO},
     server_core::config::*,
 };
 
@@ -20,7 +20,7 @@ use server_core::ServerConfig;
 use tokio::{
     join,
     net::TcpListener,
-    sync::{Mutex, RwLock},
+    sync::RwLock,
     try_join,
 };
 
@@ -39,12 +39,12 @@ async fn main() {
 
             let ban_list = Arc::new(RwLock::new(res.0.banlist));
 
-            let runtimes = tokio::spawn(start_server(res.0.server, ban_list)).await;
+            let server_data = tokio::spawn(start_server(res.0.server, ban_list)).await;
 
-            match runtimes {
-                Ok(runtimes) => match runtimes {
-                    Ok(runtimes) => {
-                        command_shell(runtimes).await;
+            match server_data {
+                Ok(server_data) => match server_data {
+                    Ok(server_data) => {
+                        command_shell(server_data.0, server_data.1, server_data.2).await;
                     }
                     Err(e) => warn!("{}", e),
                 },
@@ -57,15 +57,49 @@ async fn main() {
 
 pub type BlockRuntimes = (BlockRuntime, BlockRuntime, BlockRuntime);
 
-async fn command_shell(block_runtimes: BlockRuntimes) {
+async fn command_shell(
+    block_runtimes: BlockRuntimes,
+    connection_mg: Arc<RwLock<ConnectionManage>>,
+    relay_mg: Arc<RwLock<RelayManage>>,
+) {
     info!("Server启动成功");
-    loop {}
+    info!("输入/help获取帮助");
+    let std_in = std::io::stdin();
+    let mut admin_command = String::new();
+    loop {
+        std_in.read_line(&mut admin_command).unwrap();
+
+        if let Some(command) = admin_command.strip_prefix('/') {
+            if command.starts_with("help") {
+                info!("{}", COMMAND_HELP);
+            } else if command.starts_with("list") {
+                if let Some(command) = command.strip_prefix("list ") {
+                    let command = command.trim().to_string();
+                    if command == "player" {
+                        for player in connection_mg.read().await.connections.iter() {
+                            println!("{}", player.key());
+                        }
+                    } else if command == "room" {
+                    }
+                }
+            }
+            admin_command.clear();
+            continue;
+        }
+
+        info!("希腊奶");
+        admin_command.clear();
+    }
 }
 
 async fn start_server(
     server_config: ServerConfig,
     ban_list: Arc<RwLock<Vec<SocketAddr>>>,
-) -> anyhow::Result<BlockRuntimes> {
+) -> anyhow::Result<(
+    BlockRuntimes,
+    Arc<RwLock<ConnectionManage>>,
+    Arc<RwLock<RelayManage>>,
+)> {
     //准备IP地址信息
     let listen_addr = format!("{}{}", "0.0.0.0:", server_config.port);
 
@@ -99,14 +133,18 @@ async fn start_server(
 
     tokio::spawn(init_accepter(
         listener,
-        connection_mg,
+        connection_mg.clone(),
         ban_list,
         relay_mg.clone(),
     ));
     Ok((
-        receiver_block_rt,
-        processor_block_rt,
-        packet_sender_block_rt,
+        (
+            receiver_block_rt,
+            processor_block_rt,
+            packet_sender_block_rt,
+        ),
+        connection_mg,
+        relay_mg,
     ))
 }
 
@@ -114,7 +152,7 @@ async fn init_accepter(
     listener: TcpListener,
     connection_mg: Arc<RwLock<ConnectionManage>>,
     ban_list: Arc<RwLock<Vec<SocketAddr>>>,
-    relay_mg: Arc<Mutex<RelayManage>>,
+    relay_mg: Arc<RwLock<RelayManage>>,
 ) -> anyhow::Result<()> {
     //let mut stream_sender = Some(stream_sender);
     //info!("stream_sender={:?}",stream_sender);

@@ -77,7 +77,7 @@ pub async fn receiver(
                                 ServerCommand::Disconnect => {
                                     break;
                                 },
-                                ServerCommand::None => todo!(),
+                                ServerCommand::None => {},
                             }
                         }
                     }

@@ -1,9 +1,9 @@
 pub mod permission_status;
 pub mod player_net_api;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::{Arc, atomic::{AtomicBool, Ordering}}};
 
-use log::info;
+use log::{info, warn};
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     join,
@@ -57,11 +57,12 @@ pub struct Connection {
     pub connection_info: Arc<RwLock<ConnectionInfo>>,
     pub cache_packet: Option<Packet>,
     pub packet: Option<Packet>,
-    pub relay_mg: Arc<Mutex<RelayManage>>,
+    pub relay_mg: Arc<RwLock<RelayManage>>,
     pub room: Option<RelayRoomData>,
     pub site: Option<u32>,
     back_worker_sender: mpsc::Sender<WorkersSender>,
     pub disconnect_del_con_sender: mpsc::Sender<SocketAddr>,
+    pub is_disconnected:AtomicBool
 }
 
 impl Connection {
@@ -70,7 +71,7 @@ impl Connection {
         command_receiver: watch::Receiver<ServerCommand>,
         receiver: mpsc::Sender<ReceiverData>,
         sender: mpsc::Sender<SenderData>,
-        relay_mg: Arc<Mutex<RelayManage>>,
+        relay_mg: Arc<RwLock<RelayManage>>,
         back_worker_sender: mpsc::Sender<WorkersSender>,
         disconnect_del_con_sender: mpsc::Sender<SocketAddr>,
     ) -> Arc<RwLock<Self>> {
@@ -94,6 +95,7 @@ impl Connection {
             site: None,
             back_worker_sender,
             disconnect_del_con_sender,
+            is_disconnected:AtomicBool::new(false)
         }));
         con.write().await.con = Some(con.clone());
         con
@@ -202,7 +204,7 @@ impl Connection {
             self.send_relay_hall_message("你还什么都没输呢").await
         } else {
             if let Some(id) = player_command.strip_prefix('S') {
-                let relay = self.relay_mg.lock().await.get_relay(id);
+                let relay = self.relay_mg.write().await.get_relay(id);
                 match relay {
                     Some(room) => {
                         let (site_sender, site_receiver) = oneshot::channel();
@@ -222,7 +224,8 @@ impl Connection {
                             .await;
                     }
                 }
-            };
+                return ;
+            }
 
             let uplist = false;
             let mut mods = false;
@@ -233,13 +236,15 @@ impl Connection {
             } else if player_command.starts_with("mod") || player_command.starts_with("mods") {
                 new_room = true;
                 mods = true;
+            }else {
+                self.send_relay_hall_message("不懂").await
             }
 
             if new_room {
                 let custom = CustomRelayData::default();
                 let new_room = self
                     .relay_mg
-                    .lock()
+                    .write()
                     .await
                     .new_relay_id(
                         self.con.clone().unwrap(),
@@ -257,11 +262,9 @@ impl Connection {
                         self.room = Some(room_data);
                         self.send_relay_server_id().await;
                     }
-                    Err(_) => todo!(),
+                    Err(e) => {warn!("{}", e)},
                 }
             }
-        
-            self.send_relay_hall_message("不懂").await
         }
     }
 
@@ -442,13 +445,16 @@ impl Connection {
     }
 
     pub async fn disconnect(&mut self) {
-        self.command_sender.send(ServerCommand::Disconnect).unwrap();
-        self.back_worker_sender
-            .send((self.receiver.take().unwrap(), self.sender.take().unwrap()))
-            .await
-            .unwrap();
-
-        self.command_sender.send(ServerCommand::None).unwrap();
-        info!("{}断开连接", self.ip.as_ref().unwrap());
+        self.is_disconnected.fetch_and(true, Ordering::SeqCst);
+        if !self.is_disconnected.load(Ordering::Relaxed){
+            self.command_sender.send(ServerCommand::Disconnect).unwrap();
+            self.back_worker_sender
+                .send((self.receiver.take().unwrap(), self.sender.take().unwrap()))
+                .await
+                .unwrap();
+    
+            self.command_sender.send(ServerCommand::None).unwrap();
+            info!("{}断开连接", self.ip.as_ref().unwrap());
+        }
     }
 }

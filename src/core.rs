@@ -101,7 +101,7 @@ impl ConnectionManage {
                                         let packet_sender = sender_pool.get_free_worker().await;
                                         worker_sender.send((receiver, packet_sender)).unwrap();
                                     }
-                                    None => todo!(),
+                                    None => {},
                                 }
                             }
                             back_worker_receiver = back_worker_receiver.recv() => {
@@ -110,7 +110,7 @@ impl ConnectionManage {
                                         receiver_pool.push_free_worker(receiver).await;
                                         sender_pool.push_free_worker(packet_sender).await;
                                     }
-                                    None => todo!(),
+                                    None => {},
                                 }
                             }
                         }
@@ -133,7 +133,7 @@ impl ConnectionManage {
                             Some(ip) => {
                                 connection_mg_remove.write().await.connections.remove(&ip).unwrap();
                             },
-                            None => todo!(),
+                            None => {},
                         }
                     }
                 });
@@ -147,7 +147,7 @@ impl ConnectionManage {
 
     pub async fn prepare_new_con(
         &mut self,
-        relay_mg: Arc<Mutex<RelayManage>>,
+        relay_mg: Arc<RwLock<RelayManage>>,
     ) -> Arc<RwLock<Connection>> {
         let (command_sender, command_receiver) = watch::channel(ServerCommand::None);
 
@@ -156,7 +156,7 @@ impl ConnectionManage {
         self.get_worker_sender.send(get_worker.0).await.unwrap();
 
         let Ok((receiver, sender)) = get_worker.1.await else {
-            todo!()
+            panic!()
         };
 
         Connection::new(
@@ -267,8 +267,8 @@ pub struct RelayManage {
 }
 
 impl RelayManage {
-    pub async fn new() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(RelayManage {
+    pub async fn new() -> Arc<RwLock<Self>> {
+        Arc::new(RwLock::new(RelayManage {
             room_map: DashMap::new(),
             relay_rt: Builder::new_multi_thread()
                 .enable_time()
@@ -372,7 +372,7 @@ impl RelayManage {
                                 room.write().await.add_connect(add_con).await;
                                 //add_con.1.send(pos);
                             },
-                            None => todo!(),
+                            None => {},
                             }
 
                         },
@@ -381,7 +381,7 @@ impl RelayManage {
                             Some(packet) => {
                                 relay_packet_sender(room.clone(),packet).await;
                             },
-                            None => todo!(),
+                            None => {},
                             }
                     },
                 }
