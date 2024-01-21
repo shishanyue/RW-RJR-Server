@@ -7,6 +7,7 @@ use std::{
 };
 
 use dashmap::DashMap;
+use log::info;
 use rand::{Rng, SeedableRng};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -75,6 +76,9 @@ impl ConnectionManage {
         ) {
             (sender_pool, receiver_pool) => {
                 //let sender_semaphore = Arc::new(Semaphore::new(3));
+                info!("Processor注册成功");
+                info!("Receiver注册成功");
+                info!("Sender注册成功");
                 let (get_worker_sender, get_worker_receiver) = mpsc::channel(10);
                 let (back_worker_sender, back_worker_receiver) = mpsc::channel(10);
                 tokio::spawn(async move {

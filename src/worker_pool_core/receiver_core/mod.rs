@@ -33,16 +33,32 @@ pub async fn receiver(
     loop {
         match read_h_receiver.recv().await {
             Some((mut command_receiver, con, mut read_half, packet_sender)) => loop {
+                
                 tokio::select! {
-                    packet_length = read_half.read_u32() => {
+                    packet_length = read_half.read_i32() => {
                         match packet_length {
                             Ok(packet_length) => {
+                                
                                 let packet_type = PacketType::try_from(read_half.read_u32().await.unwrap()).unwrap_or_default();
+
+
+                                if packet_length <= 0{
+                                    con.write().await.disconnect().await;
+                                    continue;
+                                }
+
+                                if packet_length >= 1024*50||packet_type == PacketType::NOT_RESOLVED{
+                                    con.write().await.disconnect().await;
+                                    continue;
+                                }
+
+                                
+
                                 let mut packet_buffer = vec![0; packet_length as usize];
                                 read_half.read_exact(&mut packet_buffer).await.unwrap();
 
                                 let packet = Packet::decode_from_buffer(
-                                    packet_length,
+                                    packet_length as u32,
                                     packet_type,
                                     Cursor::new(packet_buffer),).await;
                                 sorter_sender
@@ -50,7 +66,7 @@ pub async fn receiver(
                                     .await
                                     .unwrap();
                             },
-                            Err(_) => todo!(),
+                            Err(_) => con.write().await.disconnect().await,
                         }
                     }
 
@@ -67,7 +83,7 @@ pub async fn receiver(
                     }
                 }
             },
-            None => todo!(),
+            None => {continue;},
             //
         }
     }

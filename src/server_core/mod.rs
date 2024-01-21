@@ -7,7 +7,6 @@ use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerConfig {
-    pub ip: String,
     pub port: usize,
     pub worker_number: usize,
     pub enable_web: bool,
@@ -24,3 +23,12 @@ pub struct AllConfig {
     pub game: GameConfig,
     pub banlist: Vec<SocketAddr>,
 }
+
+impl std::fmt::Display for AllConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "端口:{}", self.server.port)
+    }
+}
+
+
+

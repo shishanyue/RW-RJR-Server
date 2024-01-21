@@ -12,7 +12,6 @@ use toml;
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            ip: "127.0.0.1".to_string(),
             port: 5123,
             worker_number: 100,
             enable_web: false,

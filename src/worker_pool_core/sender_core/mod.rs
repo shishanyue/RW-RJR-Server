@@ -1,3 +1,4 @@
+
 use tokio::{
     io::AsyncWriteExt,
     net::tcp::OwnedWriteHalf,
@@ -51,7 +52,7 @@ pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> 
                 }
             }
 
-            None => todo!(),
+            None => {continue;},
         }
     }
 }

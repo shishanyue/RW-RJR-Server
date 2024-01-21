@@ -3,6 +3,7 @@ pub mod player_net_api;
 
 use std::{net::SocketAddr, sync::Arc};
 
+use log::info;
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     join,
@@ -259,6 +260,8 @@ impl Connection {
                     Err(_) => todo!(),
                 }
             }
+        
+            self.send_relay_hall_message("不懂").await
         }
     }
 
@@ -444,5 +447,8 @@ impl Connection {
             .send((self.receiver.take().unwrap(), self.sender.take().unwrap()))
             .await
             .unwrap();
+
+        self.command_sender.send(ServerCommand::None).unwrap();
+        info!("{}断开连接", self.ip.as_ref().unwrap());
     }
 }
