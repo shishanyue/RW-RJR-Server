@@ -26,7 +26,7 @@ pub struct AllConfig {
 
 impl std::fmt::Display for AllConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "端口:{}", self.server.port)
+        write!(f, "端口:{}\n线程总数:{}", self.server.port,self.server.worker_number)
     }
 }
 

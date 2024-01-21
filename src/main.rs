@@ -17,12 +17,7 @@ use log::{info, warn};
 
 use server_core::ServerConfig;
 
-use tokio::{
-    join,
-    net::TcpListener,
-    sync::RwLock,
-    try_join,
-};
+use tokio::{join, net::TcpListener, sync::RwLock, try_join};
 
 #[tokio::main]
 async fn main() {
@@ -68,26 +63,68 @@ async fn command_shell(
     let mut admin_command = String::new();
     loop {
         std_in.read_line(&mut admin_command).unwrap();
-
+        let mut is_unknown = true;
         if let Some(command) = admin_command.strip_prefix('/') {
             if command.starts_with("help") {
+                is_unknown = false;
                 info!("{}", COMMAND_HELP);
             } else if command.starts_with("list") {
                 if let Some(command) = command.strip_prefix("list ") {
                     let command = command.trim().to_string();
                     if command == "player" {
                         for player in connection_mg.read().await.connections.iter() {
-                            println!("{}", player.key());
+                            let player_name = player
+                                .read()
+                                .await
+                                .player_info
+                                .read()
+                                .await
+                                .player_name
+                                .clone();
+                            let player_permission_status = player
+                                .read()
+                                .await
+                                .player_info
+                                .read()
+                                .await
+                                .permission_status;
+                            println!(
+                                "玩家名:{}     权限:{:?}   IP地址:{}",
+                                player_name,
+                                player_permission_status,
+                                player.key()
+                            );
+                            is_unknown = false;
                         }
                     } else if command == "room" {
+                        for room in relay_mg.read().await.room_map.iter() {
+                            let room_data = room.relay_room.read().await;
+                            println!("id:{}", room_data.id);
+                            is_unknown = false;
+                        }
+                    }
+                }
+            } else if command.starts_with("player") {
+                let command = command.trim().to_string();
+                if let Some(command) = command.strip_prefix("player ") {
+                    if command == "size" {
+                        println!("玩家总数:{}", connection_mg.read().await.connections.len());
+                        is_unknown = false;
+                    }
+                }
+            } else if command.starts_with("room") {
+                let command = command.trim().to_string();
+                if let Some(command) = command.strip_prefix("room ") {
+                    if command == "size" {
+                        println!("房间总数:{}", relay_mg.read().await.room_map.len());
+                        is_unknown = false;
                     }
                 }
             }
-            admin_command.clear();
-            continue;
         }
-
-        info!("希腊奶");
+        if is_unknown {
+            info!("希腊奶");
+        }
         admin_command.clear();
     }
 }
@@ -106,9 +143,9 @@ async fn start_server(
     //info!("监听地址：{}", listen_addr);
 
     let (receiver_block_rt, processor_block_rt, packet_sender_block_rt) = match join!(
-        creat_block_runtime(),
-        creat_block_runtime(),
-        creat_block_runtime()
+        creat_block_runtime(server_config.worker_number),
+        creat_block_runtime(server_config.worker_number),
+        creat_block_runtime(server_config.worker_number)
     ) {
         (Ok(receiver_block_rt), Ok(processor_block_rt), Ok(packet_sender_block_rt)) => (
             receiver_block_rt,

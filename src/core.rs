@@ -176,11 +176,11 @@ impl ConnectionManage {
     }
 }
 
-pub async fn creat_block_runtime() -> anyhow::Result<BlockRuntime> {
+pub async fn creat_block_runtime(threads:usize) -> anyhow::Result<BlockRuntime> {
     Ok(Arc::new(Mutex::new(
         Builder::new_multi_thread()
             .enable_time()
-            .worker_threads(1)
+            .worker_threads(threads)
             // no timer!
             .build()
             .unwrap(),
