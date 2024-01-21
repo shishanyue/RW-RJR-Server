@@ -10,7 +10,7 @@ use tokio::{
     net::TcpStream,
     sync::{
         mpsc::{self},
-        oneshot, watch, Mutex, RwLock,
+        oneshot, watch, Mutex, RwLock, Semaphore,
     },
 };
 use uuid::Uuid;
@@ -62,7 +62,7 @@ pub struct Connection {
     pub site: Option<u32>,
     back_worker_sender: mpsc::Sender<WorkersSender>,
     pub disconnect_del_con_sender: mpsc::Sender<SocketAddr>,
-    pub is_disconnected:AtomicBool
+    pub is_disconnected:Semaphore
 }
 
 impl Connection {
@@ -95,7 +95,7 @@ impl Connection {
             site: None,
             back_worker_sender,
             disconnect_del_con_sender,
-            is_disconnected:AtomicBool::new(false)
+            is_disconnected:Semaphore::new(1)
         }));
         con.write().await.con = Some(con.clone());
         con
@@ -445,16 +445,23 @@ impl Connection {
     }
 
     pub async fn disconnect(&mut self) {
-        self.is_disconnected.fetch_and(true, Ordering::SeqCst);
-        if !self.is_disconnected.load(Ordering::Relaxed){
-            self.command_sender.send(ServerCommand::Disconnect).unwrap();
-            self.back_worker_sender
-                .send((self.receiver.take().unwrap(), self.sender.take().unwrap()))
-                .await
-                .unwrap();
-    
-            self.command_sender.send(ServerCommand::None).unwrap();
-            info!("{}断开连接", self.ip.as_ref().unwrap());
+        match self.is_disconnected.acquire().await {
+            Ok(_) => {
+                if !self.is_disconnected.is_closed(){
+                    self.is_disconnected.close();
+                    println!("is_disconnected");
+                    self.command_sender.send(ServerCommand::Disconnect).unwrap();
+                    self.back_worker_sender
+                        .send((self.receiver.take().unwrap(), self.sender.take().unwrap()))
+                        .await
+                        .unwrap();
+            
+                    self.command_sender.send(ServerCommand::None).unwrap();
+                    info!("{}断开连接", self.ip.as_ref().unwrap());
+                }
+            },
+            Err(_) => {},
         }
+        
     }
 }
