@@ -1,9 +1,7 @@
 use std::io::Cursor;
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::{sync::Arc, usize};
 
-use crate::connection_core::permission_status::PermissionStatus;
 use crate::connection_core::Connection;
 use crate::core::ServerCommand;
 use crate::packet_core::{Packet, PacketType};
@@ -32,7 +30,7 @@ pub async fn receiver(
     loop {
         match read_h_receiver.recv().await {
             Some((mut command_receiver, con, mut read_half, packet_sender)) => loop {
-                let player_info = con.read().await.player_info.clone();
+                let _player_info = con.read().await.player_info.clone();
 
                 tokio::select! {
                     packet_length = read_half.read_i32() => {

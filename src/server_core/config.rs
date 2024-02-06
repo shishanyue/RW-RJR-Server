@@ -1,6 +1,6 @@
 use std::{io::ErrorKind, path::Path};
 
-use super::{AllConfig, GameConfig, ServerConfig, UplistApi};
+use super::{AllConfig, ServerConfig};
 
 use tokio::{
     fs::{read_to_string, File},
@@ -16,16 +16,6 @@ impl Default for ServerConfig {
             thread_number: 30,
             enable_web: false,
         }
-    }
-}
-impl Default for UplistApi {
-    fn default() -> Self {
-        Self {}
-    }
-}
-impl Default for GameConfig {
-    fn default() -> Self {
-        Self {}
     }
 }
 

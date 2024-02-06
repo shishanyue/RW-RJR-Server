@@ -7,11 +7,9 @@ mod worker_pool_core;
 
 use core::BlockRuntime;
 use std::{
-    io::Cursor,
     net::SocketAddr,
     path::Path,
     sync::{atomic::Ordering, Arc},
-    time::Duration,
 };
 
 use crate::{
@@ -28,7 +26,6 @@ use tokio::{join, net::TcpListener, sync::RwLock, try_join};
 
 #[tokio::main]
 async fn main() {
-    use tokio::io::AsyncReadExt;
     // 加载配置文件并初始化终端
     // 完成初始化后开始启动服务器
     //
@@ -61,7 +58,7 @@ async fn main() {
 pub type BlockRuntimes = (BlockRuntime, BlockRuntime, BlockRuntime);
 
 async fn command_shell(
-    block_runtimes: BlockRuntimes,
+    _block_runtimes: BlockRuntimes,
     connection_mg: Arc<RwLock<ConnectionManage>>,
     relay_mg: Arc<RwLock<RelayManage>>,
 ) {

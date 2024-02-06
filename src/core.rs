@@ -16,7 +16,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{self},
-        oneshot, watch, Mutex, RwLock,
+        oneshot, Mutex, RwLock,
     },
     task::JoinHandle,
 };
@@ -39,6 +39,7 @@ pub type BlockRuntime = Arc<Mutex<Runtime>>;
 #[derive(Debug, Clone, Copy)]
 pub enum ServerCommand {
     Disconnect,
+    #[allow(dead_code)]
     None,
 }
 
@@ -65,103 +66,91 @@ impl ConnectionManage {
         let processor_sorter_sender = tokio::spawn(init_processor_sorter(processor_rt.clone()))
             .await
             .unwrap();
+        {
+            let (sender_pool, receiver_pool) = join!(
+                new_worker_pool(
+                    1,
+                    move |s_receiver, _| Box::pin(sender(s_receiver)),
+                    sender_rt,
+                    ()
+                ),
+                new_worker_pool(
+                    1,
+                    move |r_receiver, sorter_sender| Box::pin(receiver(r_receiver, sorter_sender)),
+                    receiver_rt,
+                    processor_sorter_sender.0
+                ),
+            );
+            //let sender_semaphore = Arc::new(Semaphore::new(3));
+            info!("Processor注册成功");
+            info!("Receiver注册成功");
+            info!("Sender注册成功");
+            let (get_worker_sender, get_worker_receiver) = mpsc::channel(10);
+            let (back_worker_sender, back_worker_receiver) = mpsc::channel(10);
 
-        match join!(
-            new_worker_pool(
-                1,
-                move |s_receiver, _| Box::pin(sender(s_receiver)),
-                sender_rt,
-                ()
-            ),
-            new_worker_pool(
-                1,
-                move |r_receiver, sorter_sender| Box::pin(receiver(r_receiver, sorter_sender)),
-                receiver_rt,
-                processor_sorter_sender.0
-            ),
-        ) {
-            (sender_pool, receiver_pool) => {
-                //let sender_semaphore = Arc::new(Semaphore::new(3));
-                info!("Processor注册成功");
-                info!("Receiver注册成功");
-                info!("Sender注册成功");
-                let (get_worker_sender, get_worker_receiver) = mpsc::channel(10);
-                let (back_worker_sender, back_worker_receiver) = mpsc::channel(10);
+            let receiver_size = receiver_pool.1.clone();
 
-                let receiver_size = receiver_pool.1.clone();
+            let sender_size = sender_pool.1.clone();
 
-                let sender_size = sender_pool.1.clone();
+            tokio::spawn(async move {
+                let mut sender_pool = sender_pool;
+                let mut receiver_pool = receiver_pool;
 
-                tokio::spawn(async move {
-                    let mut sender_pool = sender_pool;
-                    let mut receiver_pool = receiver_pool;
+                let mut get_worker_receiver: mpsc::Receiver<oneshot::Sender<WorkersSender>> =
+                    get_worker_receiver;
 
-                    let mut get_worker_receiver: mpsc::Receiver<oneshot::Sender<WorkersSender>> =
-                        get_worker_receiver;
+                let mut back_worker_receiver: mpsc::Receiver<WorkersSender> = back_worker_receiver;
 
-                    let mut back_worker_receiver: mpsc::Receiver<WorkersSender> =
-                        back_worker_receiver;
+                loop {
+                    tokio::select! {
+                        get_worker_receiver = get_worker_receiver.recv() => {
+                            if let Some(worker_sender) = get_worker_receiver {
+                                let receiver = receiver_pool.0.get_free_worker().await;
 
-                    loop {
-                        tokio::select! {
-                            get_worker_receiver = get_worker_receiver.recv() => {
-                                match get_worker_receiver{
-                                    Some(worker_sender) => {
-                                        let receiver = receiver_pool.0.get_free_worker().await;
-
-                                        let packet_sender = sender_pool.0.get_free_worker().await;
-                                        worker_sender.send((receiver, packet_sender)).unwrap();
-                                    }
-                                    None => {},
-                                }
+                                let packet_sender = sender_pool.0.get_free_worker().await;
+                                worker_sender.send((receiver, packet_sender)).unwrap();
                             }
-                            back_worker_receiver = back_worker_receiver.recv() => {
-                                match back_worker_receiver{
-                                    Some((receiver,packet_sender)) => {
-                                        receiver_pool.0.push_free_worker(receiver).await;
-                                        sender_pool.0.push_free_worker(packet_sender).await;
-                                    }
-                                    None => {},
-                                }
+                        }
+                        back_worker_receiver = back_worker_receiver.recv() => {
+                            if let Some((receiver,packet_sender)) = back_worker_receiver {
+                                receiver_pool.0.push_free_worker(receiver).await;
+                                sender_pool.0.push_free_worker(packet_sender).await;
                             }
                         }
                     }
-                });
-                let (disconnect_del_con_sender, disconnect_del_con_receiver) = mpsc::channel(10);
-                let connection_mg = Arc::new(RwLock::new(ConnectionManage {
-                    connections: Arc::new(DashMap::new()),
-                    get_worker_sender,
-                    back_worker_sender,
-                    disconnect_del_con_sender,
-                    receiver_size,
-                    sender_size,
-                    processor_size: processor_sorter_sender.1,
-                    self_arc: None,
-                }));
+                }
+            });
+            let (disconnect_del_con_sender, disconnect_del_con_receiver) = mpsc::channel(10);
+            let connection_mg = Arc::new(RwLock::new(ConnectionManage {
+                connections: Arc::new(DashMap::new()),
+                get_worker_sender,
+                back_worker_sender,
+                disconnect_del_con_sender,
+                receiver_size,
+                sender_size,
+                processor_size: processor_sorter_sender.1,
+                self_arc: None,
+            }));
 
-                connection_mg.write().await.self_arc = Some(connection_mg.clone());
+            connection_mg.write().await.self_arc = Some(connection_mg.clone());
 
-                let connection_mg_remove = connection_mg.clone();
-                tokio::spawn(async move {
-                    let connection_mg_remove = connection_mg_remove;
-                    let mut disconnect_del_con_receiver = disconnect_del_con_receiver;
-                    loop {
-                        match disconnect_del_con_receiver.recv().await {
-                            Some(ip) => {
-                                connection_mg_remove
-                                    .write()
-                                    .await
-                                    .connections
-                                    .remove(&ip)
-                                    .unwrap();
-                            }
-                            None => {}
-                        }
+            let connection_mg_remove = connection_mg.clone();
+            tokio::spawn(async move {
+                let connection_mg_remove = connection_mg_remove;
+                let mut disconnect_del_con_receiver = disconnect_del_con_receiver;
+                loop {
+                    if let Some(ip) = disconnect_del_con_receiver.recv().await {
+                        connection_mg_remove
+                            .write()
+                            .await
+                            .connections
+                            .remove(&ip)
+                            .unwrap();
                     }
-                });
+                }
+            });
 
-                connection_mg
-            }
+            connection_mg
         }
 
         //static SENDER_POOL = new_worker_pool(10, worker_fn, sender_rt);
@@ -246,6 +235,7 @@ pub struct RelayRoomData {
     pub relay_group_packet_sender: mpsc::Sender<Packet>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl RelayRoom {
     pub async fn new(
         admin: Arc<RwLock<Connection>>,
@@ -338,6 +328,7 @@ impl RelayManage {
         //*self.room_map.try_get(&id.to_string()).unwrap()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn new_relay_id(
         &mut self,
         con: Arc<RwLock<Connection>>,
@@ -374,6 +365,7 @@ impl RelayManage {
         Ok(new_relay)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn new_relay(
         &mut self,
         con: Arc<RwLock<Connection>>,
@@ -420,23 +412,17 @@ impl RelayManage {
             loop {
                 tokio::select! {
                     add_con_data = relay_add_con_receiver.recv() => {
-                        match add_con_data{
-                            Some(add_con) => {
+                        if let Some(add_con) = add_con_data {
 
-                                room.write().await.add_connect(add_con).await;
-                                //add_con.1.send(pos);
-                            },
-                            None => {},
-                            }
+                            room.write().await.add_connect(add_con).await;
+                            //add_con.1.send(pos);
+                        }
 
                         },
                     packet = relay_group_packet_receiver.recv() => {
-                    match packet{
-                            Some(packet) => {
-                                relay_packet_sender(room.clone(),packet).await;
-                            },
-                            None => {},
-                            }
+                        if let Some(packet) = packet {
+                            relay_packet_sender(room.clone(),packet).await;
+                        }
                     },
                 }
             }
@@ -474,8 +460,12 @@ pub async fn relay_packet_sender(room: Arc<RwLock<RelayRoom>>, mut packet: Packe
 
     send_packet.packet_buffer.write_all(&bytes).await.unwrap();
 
-    if packet_type == PacketType::KICK as u32 {}
-    if packet_type == PacketType::START_GAME as u32 {}
+    if packet_type == PacketType::KICK as u32 {
+        // TODO
+    }
+    if packet_type == PacketType::START_GAME as u32 {
+        // TODO
+    }
 
     target_con_sender.send(send_packet).await.unwrap();
 }

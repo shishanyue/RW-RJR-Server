@@ -11,9 +11,9 @@ pub struct ServerConfig {
     pub thread_number: usize,
     pub enable_web: bool,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct UplistApi {}
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct GameConfig {}
 
 #[derive(Default, Debug, Serialize, Deserialize)]

@@ -1,24 +1,14 @@
 pub mod permission_status;
 pub mod player_net_api;
 
-use std::{
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc,
-    },
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use log::{info, warn};
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     join,
     net::TcpStream,
-    sync::{
-        broadcast,
-        mpsc::{self},
-        oneshot, watch, Mutex, RwLock, Semaphore,
-    },
+    sync::{broadcast, mpsc, oneshot, RwLock, Semaphore},
 };
 use uuid::Uuid;
 
@@ -73,6 +63,7 @@ pub struct Connection {
     pub is_disconnected: Semaphore,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl Connection {
     pub async fn new(
         command_sender: broadcast::Sender<ServerCommand>,
@@ -485,7 +476,9 @@ impl Connection {
                     info!("{}断开连接", self.ip.as_ref().unwrap());
                 }
             }
-            Err(_) => {}
+            Err(e) => {
+                warn!("{}", e)
+            }
         };
     }
 }

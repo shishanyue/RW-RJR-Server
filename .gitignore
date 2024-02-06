@@ -1,6 +1,6 @@
 /target
 /target/*
-/.vscode
+.vscode/*
 output.log
 *.toml
 /dummy_core

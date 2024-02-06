@@ -1,9 +1,10 @@
-use std::{hash::Hash, io::Cursor};
+use std::io::Cursor;
 
 use num_enum::TryFromPrimitive;
 use tokio::io::AsyncWriteExt;
 
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, Default, Clone, Copy)]
 #[repr(u32)]
 pub enum PacketType {
