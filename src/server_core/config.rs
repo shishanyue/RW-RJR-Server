@@ -13,7 +13,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             port: 5123,
-            worker_number: 100,
+            thread_number: 30,
             enable_web: false,
         }
     }

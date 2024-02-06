@@ -4,8 +4,15 @@ mod data;
 mod packet_core;
 mod server_core;
 mod worker_pool_core;
+
 use core::BlockRuntime;
-use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
+use std::{
+    io::Cursor,
+    net::SocketAddr,
+    path::Path,
+    sync::{atomic::Ordering, Arc},
+    time::Duration,
+};
 
 use crate::{
     core::{creat_block_runtime, ConnectionManage, RelayManage},
@@ -21,6 +28,7 @@ use tokio::{join, net::TcpListener, sync::RwLock, try_join};
 
 #[tokio::main]
 async fn main() {
+    use tokio::io::AsyncReadExt;
     // 加载配置文件并初始化终端
     // 完成初始化后开始启动服务器
     //
@@ -94,14 +102,35 @@ async fn command_shell(
                                 player_permission_status,
                                 player.key()
                             );
-                            is_unknown = false;
                         }
+                        is_unknown = false;
                     } else if command == "room" {
                         for room in relay_mg.read().await.room_map.iter() {
                             let room_data = room.relay_room.read().await;
                             println!("id:{}", room_data.id);
-                            is_unknown = false;
                         }
+                        is_unknown = false;
+                    } else if command == "all_worker" {
+                        let receiver_size = connection_mg
+                            .read()
+                            .await
+                            .receiver_size
+                            .load(Ordering::Relaxed);
+                        let sender_size = connection_mg
+                            .read()
+                            .await
+                            .sender_size
+                            .load(Ordering::Relaxed);
+                        let processor_size = connection_mg
+                            .read()
+                            .await
+                            .processor_size
+                            .load(Ordering::Relaxed);
+                        println!(
+                            "receiver:{}\nprocessor:{}\nsender:{}",
+                            receiver_size, processor_size, sender_size
+                        );
+                        is_unknown = false;
                     }
                 }
             } else if command.starts_with("player") {
@@ -143,9 +172,9 @@ async fn start_server(
     //info!("监听地址：{}", listen_addr);
 
     let (receiver_block_rt, processor_block_rt, packet_sender_block_rt) = match join!(
-        creat_block_runtime(server_config.worker_number),
-        creat_block_runtime(server_config.worker_number),
-        creat_block_runtime(server_config.worker_number)
+        creat_block_runtime(server_config.thread_number),
+        creat_block_runtime(server_config.thread_number),
+        creat_block_runtime(server_config.thread_number)
     ) {
         (Ok(receiver_block_rt), Ok(processor_block_rt), Ok(packet_sender_block_rt)) => (
             receiver_block_rt,

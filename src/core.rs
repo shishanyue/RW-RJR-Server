@@ -14,9 +14,11 @@ use tokio::{
     join,
     runtime::{Builder, Runtime},
     sync::{
+        broadcast,
         mpsc::{self},
         oneshot, watch, Mutex, RwLock,
     },
+    task::JoinHandle,
 };
 
 use crate::{
@@ -48,6 +50,10 @@ pub struct ConnectionManage {
     pub get_worker_sender: mpsc::Sender<oneshot::Sender<WorkersSender>>,
     pub back_worker_sender: mpsc::Sender<WorkersSender>,
     pub disconnect_del_con_sender: mpsc::Sender<SocketAddr>,
+    pub receiver_size: Arc<AtomicU32>,
+    pub sender_size: Arc<AtomicU32>,
+    pub processor_size: Arc<AtomicU32>,
+    pub self_arc: Option<Arc<RwLock<Self>>>,
 }
 
 impl ConnectionManage {
@@ -62,16 +68,16 @@ impl ConnectionManage {
 
         match join!(
             new_worker_pool(
-                100,
+                1,
                 move |s_receiver, _| Box::pin(sender(s_receiver)),
                 sender_rt,
                 ()
             ),
             new_worker_pool(
-                100,
+                1,
                 move |r_receiver, sorter_sender| Box::pin(receiver(r_receiver, sorter_sender)),
                 receiver_rt,
-                processor_sorter_sender
+                processor_sorter_sender.0
             ),
         ) {
             (sender_pool, receiver_pool) => {
@@ -81,6 +87,11 @@ impl ConnectionManage {
                 info!("Sender注册成功");
                 let (get_worker_sender, get_worker_receiver) = mpsc::channel(10);
                 let (back_worker_sender, back_worker_receiver) = mpsc::channel(10);
+
+                let receiver_size = receiver_pool.1.clone();
+
+                let sender_size = sender_pool.1.clone();
+
                 tokio::spawn(async move {
                     let mut sender_pool = sender_pool;
                     let mut receiver_pool = receiver_pool;
@@ -96,9 +107,9 @@ impl ConnectionManage {
                             get_worker_receiver = get_worker_receiver.recv() => {
                                 match get_worker_receiver{
                                     Some(worker_sender) => {
-                                        let receiver = receiver_pool.get_free_worker().await;
+                                        let receiver = receiver_pool.0.get_free_worker().await;
 
-                                        let packet_sender = sender_pool.get_free_worker().await;
+                                        let packet_sender = sender_pool.0.get_free_worker().await;
                                         worker_sender.send((receiver, packet_sender)).unwrap();
                                     }
                                     None => {},
@@ -107,8 +118,8 @@ impl ConnectionManage {
                             back_worker_receiver = back_worker_receiver.recv() => {
                                 match back_worker_receiver{
                                     Some((receiver,packet_sender)) => {
-                                        receiver_pool.push_free_worker(receiver).await;
-                                        sender_pool.push_free_worker(packet_sender).await;
+                                        receiver_pool.0.push_free_worker(receiver).await;
+                                        sender_pool.0.push_free_worker(packet_sender).await;
                                     }
                                     None => {},
                                 }
@@ -122,7 +133,13 @@ impl ConnectionManage {
                     get_worker_sender,
                     back_worker_sender,
                     disconnect_del_con_sender,
+                    receiver_size,
+                    sender_size,
+                    processor_size: processor_sorter_sender.1,
+                    self_arc: None,
                 }));
+
+                connection_mg.write().await.self_arc = Some(connection_mg.clone());
 
                 let connection_mg_remove = connection_mg.clone();
                 tokio::spawn(async move {
@@ -131,9 +148,14 @@ impl ConnectionManage {
                     loop {
                         match disconnect_del_con_receiver.recv().await {
                             Some(ip) => {
-                                connection_mg_remove.write().await.connections.remove(&ip).unwrap();
-                            },
-                            None => {},
+                                connection_mg_remove
+                                    .write()
+                                    .await
+                                    .connections
+                                    .remove(&ip)
+                                    .unwrap();
+                            }
+                            None => {}
                         }
                     }
                 });
@@ -149,7 +171,7 @@ impl ConnectionManage {
         &mut self,
         relay_mg: Arc<RwLock<RelayManage>>,
     ) -> Arc<RwLock<Connection>> {
-        let (command_sender, command_receiver) = watch::channel(ServerCommand::None);
+        let (command_sender, command_receiver) = broadcast::channel(5);
 
         let get_worker = oneshot::channel();
 
@@ -167,6 +189,7 @@ impl ConnectionManage {
             relay_mg,
             self.back_worker_sender.clone(),
             self.disconnect_del_con_sender.clone(),
+            self.self_arc.as_ref().unwrap().clone(),
         )
         .await
     }
@@ -174,9 +197,15 @@ impl ConnectionManage {
     pub async fn insert_con(&mut self, ip: SocketAddr, con: Arc<RwLock<Connection>>) {
         self.connections.insert(ip, con);
     }
+
+    pub async fn remove_con(&mut self, ip: SocketAddr) {
+        if self.connections.contains_key(&ip) {
+            self.connections.remove(&ip);
+        }
+    }
 }
 
-pub async fn creat_block_runtime(threads:usize) -> anyhow::Result<BlockRuntime> {
+pub async fn creat_block_runtime(threads: usize) -> anyhow::Result<BlockRuntime> {
     Ok(Arc::new(Mutex::new(
         Builder::new_multi_thread()
             .enable_time()
@@ -204,6 +233,8 @@ pub struct RelayRoom {
     pub beta_game_version: bool,
     pub version: u32,
     pub max_player: i32,
+    pub handle: Option<JoinHandle<()>>,
+    relay_mg: Arc<RwLock<RelayManage>>,
     //pub relay_broadcast_sender: broadcast::Sender<Packet>
 }
 
@@ -225,6 +256,7 @@ impl RelayRoom {
         version: u32,
         max_player: i32,
         admin_packet_sender: mpsc::Sender<Packet>,
+        relay_mg: Arc<RwLock<RelayManage>>,
     ) -> Arc<RwLock<Self>> {
         let player_map = DashMap::new();
         let site = AtomicU32::new(2);
@@ -240,13 +272,25 @@ impl RelayRoom {
             beta_game_version,
             version,
             max_player,
+            handle: None,
+            relay_mg,
         }))
     }
     pub async fn add_connect(&mut self, con_data: RelayConData) {
-        let pos = self.site.fetch_add(1, Ordering::SeqCst);
+        let pos = self.site.fetch_add(1, Ordering::Acquire);
 
         self.player_map.insert(pos, con_data.0);
         con_data.1.send(pos).unwrap();
+    }
+
+    pub async fn remove_con(&mut self, site: u32) {
+        if self.player_map.contains_key(&site) {
+            self.player_map.remove(&site);
+            if self.player_map.is_empty() {
+                self.handle.take().unwrap().abort();
+                self.relay_mg.write().await.remove_room(&self.id);
+            }
+        }
     }
 
     pub fn get_con_sender(&mut self, index: u32) -> Option<mpsc::Sender<Packet>> {
@@ -264,11 +308,12 @@ pub struct RelayManage {
     pub room_map: DashMap<String, RelayRoomData>,
     pub relay_rt: Runtime,
     pub id_rand: rand::rngs::StdRng,
+    pub arc_self: Option<Arc<RwLock<Self>>>,
 }
 
 impl RelayManage {
     pub async fn new() -> Arc<RwLock<Self>> {
-        Arc::new(RwLock::new(RelayManage {
+        let relay_mg = Arc::new(RwLock::new(RelayManage {
             room_map: DashMap::new(),
             relay_rt: Builder::new_multi_thread()
                 .enable_time()
@@ -277,7 +322,10 @@ impl RelayManage {
                 .build()
                 .unwrap(),
             id_rand: SeedableRng::from_entropy(),
-        }))
+            arc_self: None,
+        }));
+        relay_mg.write().await.arc_self = Some(relay_mg.clone());
+        relay_mg
     }
 
     pub fn get_relay(&mut self, id: &str) -> Option<RelayRoomData> {
@@ -344,7 +392,12 @@ impl RelayManage {
         let id = if let Some(id) = id {
             id
         } else {
-            self.id_rand.gen_range(100..9999).to_string()
+            loop {
+                let tmp_id = self.id_rand.gen_range(100..9999).to_string();
+                if !self.room_map.contains_key(&tmp_id) {
+                    break tmp_id;
+                }
+            }
         };
 
         let relay_room = RelayRoom::new(
@@ -356,12 +409,13 @@ impl RelayManage {
             version,
             max_player,
             admin_packet_sender,
+            self.arc_self.as_ref().unwrap().clone(),
         )
         .await;
 
         let room = relay_room.clone();
 
-        self.relay_rt.spawn(async move {
+        let handle = self.relay_rt.spawn(async move {
             let room = room.clone();
             loop {
                 tokio::select! {
@@ -388,11 +442,19 @@ impl RelayManage {
             }
         });
 
+        relay_room.write().await.handle = Some(handle);
+
         RelayRoomData {
             relay_room,
             id,
             relay_add_con_sender,
             relay_group_packet_sender,
+        }
+    }
+
+    pub fn remove_room(&mut self, id: &String) {
+        if self.room_map.contains_key(id) {
+            self.room_map.remove(id);
         }
     }
 }
@@ -406,19 +468,14 @@ pub async fn relay_packet_sender(room: Arc<RwLock<RelayRoom>>, mut packet: Packe
     if packet_type == PacketType::DISCONNECT as u32 {
         return;
     }
+    let target_con_sender = room.write().await.get_con_sender(target).unwrap();
 
-    let mut send_packet = Packet::new_by_num(packet_type).await;
+    let mut send_packet = Packet::new(PacketType::try_from(packet_type).unwrap_or_default()).await;
 
     send_packet.packet_buffer.write_all(&bytes).await.unwrap();
 
-    let target_con_sender = room.write().await.get_con_sender(target).unwrap();
-
-    if packet_type == PacketType::KICK as u32{
-
-    }
-    if packet_type == PacketType::START_GAME as u32{
-        
-    }
+    if packet_type == PacketType::KICK as u32 {}
+    if packet_type == PacketType::START_GAME as u32 {}
 
     target_con_sender.send(send_packet).await.unwrap();
 }

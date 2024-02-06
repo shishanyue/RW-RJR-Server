@@ -1,7 +1,13 @@
 pub mod permission_status;
 pub mod player_net_api;
 
-use std::{net::SocketAddr, sync::{Arc, atomic::{AtomicBool, Ordering}}};
+use std::{
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        Arc,
+    },
+};
 
 use log::{info, warn};
 use tokio::{
@@ -9,6 +15,7 @@ use tokio::{
     join,
     net::TcpStream,
     sync::{
+        broadcast,
         mpsc::{self},
         oneshot, watch, Mutex, RwLock, Semaphore,
     },
@@ -17,7 +24,7 @@ use uuid::Uuid;
 
 use crate::{
     connection_core::player_net_api::{read_if_is_string, read_string},
-    core::{RelayManage, RelayRoomData, ServerCommand, WorkersSender},
+    core::{ConnectionManage, RelayManage, RelayRoomData, ServerCommand, WorkersSender},
     packet_core::{Packet, PacketType},
     worker_pool_core::{receiver_core::ReceiverData, sender_core::SenderData},
 };
@@ -47,8 +54,8 @@ pub struct ConnectionInfo {
 pub struct Connection {
     pub con: Option<Arc<RwLock<Connection>>>,
     pub ip: Option<SocketAddr>,
-    command_sender: watch::Sender<ServerCommand>,
-    command_receiver: watch::Receiver<ServerCommand>,
+    command_sender: broadcast::Sender<ServerCommand>,
+    command_receiver: broadcast::Receiver<ServerCommand>,
     receiver: Option<mpsc::Sender<ReceiverData>>,
     sender: Option<mpsc::Sender<SenderData>>,
     pub packet_sender: mpsc::Sender<Packet>,
@@ -58,22 +65,24 @@ pub struct Connection {
     pub cache_packet: Option<Packet>,
     pub packet: Option<Packet>,
     pub relay_mg: Arc<RwLock<RelayManage>>,
+    pub connection_mg: Arc<RwLock<ConnectionManage>>,
     pub room: Option<RelayRoomData>,
     pub site: Option<u32>,
     back_worker_sender: mpsc::Sender<WorkersSender>,
     pub disconnect_del_con_sender: mpsc::Sender<SocketAddr>,
-    pub is_disconnected:Semaphore
+    pub is_disconnected: Semaphore,
 }
 
 impl Connection {
     pub async fn new(
-        command_sender: watch::Sender<ServerCommand>,
-        command_receiver: watch::Receiver<ServerCommand>,
+        command_sender: broadcast::Sender<ServerCommand>,
+        command_receiver: broadcast::Receiver<ServerCommand>,
         receiver: mpsc::Sender<ReceiverData>,
         sender: mpsc::Sender<SenderData>,
         relay_mg: Arc<RwLock<RelayManage>>,
         back_worker_sender: mpsc::Sender<WorkersSender>,
         disconnect_del_con_sender: mpsc::Sender<SocketAddr>,
+        connection_mg: Arc<RwLock<ConnectionManage>>,
     ) -> Arc<RwLock<Self>> {
         let (packet_sender, packet_receiver) = mpsc::channel(10);
 
@@ -91,11 +100,12 @@ impl Connection {
             cache_packet: None,
             packet: None,
             relay_mg,
+            connection_mg,
             room: None,
             site: None,
             back_worker_sender,
             disconnect_del_con_sender,
-            is_disconnected:Semaphore::new(1)
+            is_disconnected: Semaphore::new(1),
         }));
         con.write().await.con = Some(con.clone());
         con
@@ -107,13 +117,13 @@ impl Connection {
 
         match join!(
             self.receiver.as_ref().unwrap().send((
-                self.command_receiver.clone(),
+                self.command_receiver.resubscribe(),
                 self.con.clone().unwrap(),
                 read_half,
                 self.packet_sender.clone()
             )),
             self.sender.as_ref().unwrap().send((
-                self.command_receiver.clone(),
+                self.command_receiver.resubscribe(),
                 write_half,
                 self.packet_receiver.take().unwrap()
             ))
@@ -142,12 +152,6 @@ impl Connection {
         write_string(&mut packet, msg).await.unwrap();
 
         self.packet_sender.send(packet).await.unwrap();
-        /*
-            GameOutputStream o( PacketType::RELAY_117);
-        o.writeByte(1);
-        o.writeInt(5);
-        o.writeString(str);
-             */
     }
 
     pub async fn relay_direct_inspection(&mut self) -> Option<RelayDirectInspection> {
@@ -224,7 +228,7 @@ impl Connection {
                             .await;
                     }
                 }
-                return ;
+                return;
             }
 
             let uplist = false;
@@ -236,7 +240,7 @@ impl Connection {
             } else if player_command.starts_with("mod") || player_command.starts_with("mods") {
                 new_room = true;
                 mods = true;
-            }else {
+            } else {
                 self.send_relay_hall_message("不懂").await
             }
 
@@ -262,7 +266,9 @@ impl Connection {
                         self.room = Some(room_data);
                         self.send_relay_server_id().await;
                     }
-                    Err(e) => {warn!("{}", e)},
+                    Err(e) => {
+                        warn!("{}", e)
+                    }
                 }
             }
         }
@@ -270,6 +276,7 @@ impl Connection {
 
     pub async fn send_relay_server_id(&mut self) {
         self.player_info.write().await.permission_status = PermissionStatus::HostPermission;
+        self.site = Some(1);
 
         let mut packet = Packet::new(PacketType::RELAY_BECOME_SERVER).await;
 
@@ -379,7 +386,8 @@ impl Connection {
 
         self.send_package_to_host(self.cache_packet.as_ref().unwrap().clone())
             .await;
-        self.chat_message_packet_internal("RJR Server:","欢迎",5).await;
+        self.chat_message_packet_internal("RJR Server:", "欢迎", 5)
+            .await;
     }
 
     pub async fn send_package_to_host(&mut self, packet: Packet) {
@@ -412,7 +420,9 @@ impl Connection {
             .await
             .unwrap();
 
-        self.room
+        //todo player玩家在host断开后会panic
+        let _ = self
+            .room
             .as_ref()
             .unwrap()
             .relay_room
@@ -420,8 +430,7 @@ impl Connection {
             .await
             .admin_packet_sender
             .send(send_packet)
-            .await
-            .unwrap();
+            .await;
     }
 
     pub async fn chat_message_packet_internal(&mut self, sender: &str, msg: &str, team: u32) {
@@ -447,21 +456,36 @@ impl Connection {
     pub async fn disconnect(&mut self) {
         match self.is_disconnected.acquire().await {
             Ok(_) => {
-                if !self.is_disconnected.is_closed(){
+                if !self.is_disconnected.is_closed() {
                     self.is_disconnected.close();
-                    println!("is_disconnected");
+                    //println!("is_disconnected");
                     self.command_sender.send(ServerCommand::Disconnect).unwrap();
                     self.back_worker_sender
                         .send((self.receiver.take().unwrap(), self.sender.take().unwrap()))
                         .await
                         .unwrap();
-            
-                    self.command_sender.send(ServerCommand::None).unwrap();
+
+                    self.connection_mg
+                        .write()
+                        .await
+                        .remove_con(self.ip.unwrap())
+                        .await;
+
+                    if self.room.is_some() {
+                        self.room
+                            .as_ref()
+                            .unwrap()
+                            .relay_room
+                            .write()
+                            .await
+                            .remove_con(*self.site.as_ref().unwrap())
+                            .await;
+                    }
+
                     info!("{}断开连接", self.ip.as_ref().unwrap());
                 }
-            },
-            Err(_) => {},
-        }
-        
+            }
+            Err(_) => {}
+        };
     }
 }
