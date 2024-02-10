@@ -4,8 +4,13 @@ mod data;
 mod packet_core;
 mod server_core;
 mod worker_pool_core;
+
 use core::BlockRuntime;
-use std::{net::SocketAddr, path::Path, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::Path,
+    sync::{atomic::Ordering, Arc},
+};
 
 use crate::{
     core::{creat_block_runtime, ConnectionManage, RelayManage},
@@ -53,7 +58,7 @@ async fn main() {
 pub type BlockRuntimes = (BlockRuntime, BlockRuntime, BlockRuntime);
 
 async fn command_shell(
-    block_runtimes: BlockRuntimes,
+    _block_runtimes: BlockRuntimes,
     connection_mg: Arc<RwLock<ConnectionManage>>,
     relay_mg: Arc<RwLock<RelayManage>>,
 ) {
@@ -94,14 +99,35 @@ async fn command_shell(
                                 player_permission_status,
                                 player.key()
                             );
-                            is_unknown = false;
                         }
+                        is_unknown = false;
                     } else if command == "room" {
                         for room in relay_mg.read().await.room_map.iter() {
                             let room_data = room.relay_room.read().await;
                             println!("id:{}", room_data.id);
-                            is_unknown = false;
                         }
+                        is_unknown = false;
+                    } else if command == "all_worker" {
+                        let receiver_size = connection_mg
+                            .read()
+                            .await
+                            .receiver_size
+                            .load(Ordering::Relaxed);
+                        let sender_size = connection_mg
+                            .read()
+                            .await
+                            .sender_size
+                            .load(Ordering::Relaxed);
+                        let processor_size = connection_mg
+                            .read()
+                            .await
+                            .processor_size
+                            .load(Ordering::Relaxed);
+                        println!(
+                            "receiver:{}\nprocessor:{}\nsender:{}",
+                            receiver_size, processor_size, sender_size
+                        );
+                        is_unknown = false;
                     }
                 }
             } else if command.starts_with("player") {
@@ -143,9 +169,9 @@ async fn start_server(
     //info!("监听地址：{}", listen_addr);
 
     let (receiver_block_rt, processor_block_rt, packet_sender_block_rt) = match join!(
-        creat_block_runtime(server_config.worker_number),
-        creat_block_runtime(server_config.worker_number),
-        creat_block_runtime(server_config.worker_number)
+        creat_block_runtime(server_config.thread_number),
+        creat_block_runtime(server_config.thread_number),
+        creat_block_runtime(server_config.thread_number)
     ) {
         (Ok(receiver_block_rt), Ok(processor_block_rt), Ok(packet_sender_block_rt)) => (
             receiver_block_rt,

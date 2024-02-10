@@ -4,6 +4,7 @@ use num_enum::TryFromPrimitive;
 use tokio::io::AsyncWriteExt;
 
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, Default, Clone, Copy)]
 #[repr(u32)]
 pub enum PacketType {
@@ -78,10 +79,9 @@ pub enum PacketType {
     NOT_RESOLVED = u32::MAX,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Packet {
     pub packet_type: PacketType,
-    pub packet_type_num: u32,
     pub packet_length: u32,
     pub packet_buffer: Cursor<Vec<u8>>,
     pub is_prepared: bool,
@@ -96,19 +96,6 @@ impl Packet {
             packet_length: 0,
             packet_buffer: buffer,
             is_prepared: false,
-            packet_type_num: 0,
-        }
-    }
-
-    pub async fn new_by_num(packet_type_num: u32) -> Self {
-        let mut buffer = Cursor::new(Vec::new());
-        buffer.write_u64(0).await.unwrap();
-        Packet {
-            packet_type:PacketType::NOT_RESOLVED,
-            packet_length: 0,
-            packet_buffer: buffer,
-            is_prepared: false,
-            packet_type_num,
         }
     }
 
@@ -122,17 +109,12 @@ impl Packet {
             packet_length,
             packet_buffer,
             is_prepared: true,
-            packet_type_num: 0,
         }
     }
 
     pub async fn prepare(&mut self) {
         if !self.is_prepared {
-            let packet_type = if self.packet_type_num == 0 {
-                self.packet_type as u32
-            } else {
-                self.packet_type_num
-            };
+            let packet_type = self.packet_type as u32;
 
             self.packet_length = self.packet_buffer.position() as u32 - 8;
             self.packet_buffer.set_position(0);

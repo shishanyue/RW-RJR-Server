@@ -69,12 +69,14 @@ pub async fn write_is_string(packet: &mut Packet, str: &str) -> std::io::Result<
     }
 }
 
-
-pub async fn read_stream_bytes(packet: &mut Packet) -> Vec<u8>{
+pub async fn read_stream_bytes(packet: &mut Packet) -> Vec<u8> {
     let mut packet_bytes = vec![0; packet.packet_buffer.read_u32().await.unwrap() as usize];
 
-    packet.packet_buffer.read_exact(&mut packet_bytes).await.unwrap();
+    packet
+        .packet_buffer
+        .read_exact(&mut packet_bytes)
+        .await
+        .unwrap();
 
     packet_bytes
 }
-

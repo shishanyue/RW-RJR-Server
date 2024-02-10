@@ -1,4 +1,4 @@
-pub static START_INFO:&str = "
+pub static START_INFO: &str = "
 \t██████╗ ██╗    ██╗      ██████╗      ██╗██████╗ 
 \t██╔══██╗██║    ██║      ██╔══██╗     ██║██╔══██╗
 \t██████╔╝██║ █╗ ██║█████╗██████╔╝     ██║██████╔╝
@@ -7,9 +7,10 @@ pub static START_INFO:&str = "
 \t╚═╝  ╚═╝ ╚══╝╚══╝       ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝
 ";
 
-
-pub static COMMAND_HELP:&str = "
+pub static COMMAND_HELP: &str = "
 /list player    列出所有玩家
 /list room      列出所有房间
 /player size    玩家总数
-/room size    房间总数";
+/room size    房间总数
+/list all_worker
+";

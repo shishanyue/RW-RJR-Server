@@ -1,5 +1,7 @@
 /target
 /target/*
-/.vscode
+.vscode/*
 output.log
 *.toml
+/dummy_core
+/dummy_core/*
