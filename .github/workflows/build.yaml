@@ -1,0 +1,34 @@
+name: build
+on:
+  schedule:
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'windows-latest']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+      - name: Setup | Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Build | Rust
+        run: cargo build --release
+      - name: Upload Artifact | Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-windows-msvc-rw_rjr-nightly.exe
+          path: target/release/rw_rjr.exe
+      - name: Upload Artifact | Linux
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-linux-gnu-rw_rjr-nightly
+          path: target/release/rw_rjr
+    
+  
