@@ -8,11 +8,9 @@ use tokio::sync::{
 use crate::{
     connection_core::{permission_status::PermissionStatus, Connection},
     core::BlockRuntime,
+    data::_RELAY_INFO,
     packet_core::{Packet, PacketType},
-    data::RELAY_INFO
 };
-
-
 
 use super::new_worker_pool;
 
@@ -80,8 +78,7 @@ pub async fn processor(mut data_receiver: mpsc::Receiver<ProcesseorData>) -> any
                         match inspection_data {
                             Some(data) => match (data.player_name.clone(), data.query_string) {
                                 (Some(name), None) => {
-                                    con.read().await.player_info.write().await.player_name =
-                                        name;
+                                    con.read().await.player_info.write().await.player_name = name;
                                     con.read()
                                         .await
                                         .connection_info
@@ -97,7 +94,10 @@ pub async fn processor(mut data_receiver: mpsc::Receiver<ProcesseorData>) -> any
                                     con.write()
                                         .await
                                         .send_relay_hall_message(&format!(
-                                            RELAY_INFO,
+                                            "[Relay CN]{} 欢迎使用RJR,这台服务是非官方的Relay房间
+This server is CN's unofficial Relay room
+输入ID可进入房间，输入new/mods可创建房间
+输入/help可以获得更多帮助",
                                             data.player_name.unwrap_or("unkonwn".to_string())
                                         ))
                                         .await;
