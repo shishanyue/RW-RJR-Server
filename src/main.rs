@@ -26,12 +26,17 @@ use tokio::{join, net::TcpListener, sync::RwLock, try_join};
 
 #[tokio::main]
 async fn main() {
+    init_shell().unwrap();
     // 加载配置文件并初始化终端
     // 完成初始化后开始启动服务器
     //
+    info!(
+        "当前启动目录：{}",
+        std::env::current_dir().unwrap().to_str().unwrap()
+    );
     let path = Path::new("config.toml");
 
-    match try_join!(load_config(path), init_shell()) {
+    match try_join!(load_config(path),) {
         Ok(res) => {
             println!("{}", START_INFO);
             info!("加载中.....");
@@ -241,7 +246,7 @@ async fn init_accepter(
     }
 }
 
-async fn init_shell() -> anyhow::Result<()> {
+fn init_shell() -> anyhow::Result<()> {
     Ok(fern::Dispatch::new()
         // Perform allocation-free log formatting
         .format(|out, message, record| {
