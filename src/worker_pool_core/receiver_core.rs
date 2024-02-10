@@ -61,7 +61,7 @@ pub async fn receiver(
                                     packet_type,
                                     Cursor::new(packet_buffer)).await;
 
-                                    println!("{:?}",packet);
+                                  //println!("{:?}",packet);
 
 
                                 sorter_sender
