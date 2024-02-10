@@ -22,13 +22,15 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         uses: actions/upload-artifact@v4
         with:
-          name: x86_64-windows-msvc-rw_rjr-nightly.exe
-          path: target/release/rw_rjr.exe
+          name: x86_64-windows-msvc-rws_rjr-nightly.exe
+          path: target/release/rws_rjr.exe
+          retention-days: 14
       - name: Upload Artifact | Linux
         if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: actions/upload-artifact@v4
         with:
-          name: x86_64-linux-gnu-rw_rjr-nightly
-          path: target/release/rw_rjr
+          name: x86_64-linux-gnu-rws_rjr-nightly
+          path: target/release/rws_rjr
+          retention-days: 14
     
   
