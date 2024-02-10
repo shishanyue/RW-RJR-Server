@@ -8,7 +8,6 @@ use tokio::sync::{
 use crate::{
     connection_core::{permission_status::PermissionStatus, Connection},
     core::BlockRuntime,
-    data::_RELAY_INFO,
     packet_core::{Packet, PacketType},
 };
 
