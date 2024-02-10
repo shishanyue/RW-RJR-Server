@@ -454,7 +454,6 @@ dependencies = [
  "num_enum",
  "rand",
  "serde",
- "serde_derive",
  "sha256",
  "thiserror",
  "tokio",

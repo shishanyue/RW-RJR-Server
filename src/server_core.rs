@@ -3,7 +3,7 @@ pub mod utils;
 
 use std::net::SocketAddr;
 
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerConfig {
