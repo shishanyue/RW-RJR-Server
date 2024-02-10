@@ -9,7 +9,10 @@ use crate::{
     connection_core::{permission_status::PermissionStatus, Connection},
     core::BlockRuntime,
     packet_core::{Packet, PacketType},
+    data::RELAY_INFO
 };
+
+
 
 use super::new_worker_pool;
 
@@ -94,7 +97,7 @@ pub async fn processor(mut data_receiver: mpsc::Receiver<ProcesseorData>) -> any
                                     con.write()
                                         .await
                                         .send_relay_hall_message(&format!(
-                                            "{},欢迎来到RJR",
+                                            RELAY_INFO,
                                             data.player_name.unwrap_or("unkonwn".to_string())
                                         ))
                                         .await;
