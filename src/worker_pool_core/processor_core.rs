@@ -1,9 +1,9 @@
 use std::sync::{atomic::AtomicU32, Arc};
 
-use tokio::sync::{
-    mpsc::{self},
+use tokio::{runtime::Runtime, sync::{
+    mpsc,
     Mutex, RwLock,
-};
+}};
 
 use crate::{
     connection_core::{permission_status::PermissionStatus, Connection},
@@ -16,17 +16,11 @@ use super::new_worker_pool;
 pub type ProcesseorData = (Arc<RwLock<Connection>>, mpsc::Sender<Packet>, Packet);
 
 pub async fn init_processor_sorter(
-    processor_rt: BlockRuntime,
+    processor_rt: Runtime,
 ) -> (mpsc::Sender<ProcesseorData>, Arc<AtomicU32>) {
     let (packet_process_sender, mut packet_process_receiver) = mpsc::channel::<ProcesseorData>(10);
 
-    let processor_pool = new_worker_pool(
-        1,
-        move |p_receiver, _| Box::pin(processor(p_receiver)),
-        processor_rt,
-        (),
-    )
-    .await;
+
 
     let processor_size = processor_pool.1.clone();
 

@@ -13,7 +13,7 @@ toml = "0.8.8"
 tokio = { version = "1.35.1", features = ["full"] }
 serde = { version = "1.0.195", features = ["derive"] }
 sha256 = "1.5.0"
-fern = "0.6.2"
+fern = { version = "0.6.2", features = ["colored"] }
 log = "0.4.20"
 thiserror = "1.0.56"
 anyhow = "1.0.79"
@@ -22,7 +22,7 @@ num_enum = "0.7.2"
 bytes = "1.5.0"
 num-bigint = "0.4.4"
 dashmap = "5.5.3"
-
+async-channel = "2.2.0"
 
 [dependencies.uuid]
 version = "1.7.0"

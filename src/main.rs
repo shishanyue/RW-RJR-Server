@@ -4,8 +4,10 @@ mod data;
 mod packet_core;
 mod server_core;
 mod worker_pool_core;
+mod worker_pool_manager;
+mod connection_manager;
 
-use core::BlockRuntime;
+
 use std::{
     net::SocketAddr,
     path::Path,
@@ -13,11 +15,13 @@ use std::{
 };
 
 use crate::{
-    core::{creat_block_runtime, ConnectionManage, RelayManage},
+    core::{creat_block_runtime, RelayManage},
     data::{COMMAND_HELP, START_INFO},
     server_core::config::*,
 };
 
+use connection_manager::ConnectionManager;
+use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, warn};
 
 use server_core::ServerConfig;
@@ -30,21 +34,31 @@ async fn main() {
     // 加载配置文件并初始化终端
     // 完成初始化后开始启动服务器
     //
-    info!(
-        "当前启动目录：{}",
-        std::env::current_dir().unwrap().to_str().unwrap()
-    );
-    let path = Path::new("config.toml");
 
-    match try_join!(load_config(path),) {
+    let binding = std::env::current_dir().unwrap();
+    let current_dir = binding.to_str().unwrap();
+    let binding = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("config.toml");
+    let config_dir = binding.as_path();
+
+    info!(
+        "当前启动目录:{}\n\t\t\t\t配置文件所在目录:{}",
+        current_dir,
+        config_dir.to_str().unwrap()
+    );
+
+    match load_config(config_dir).await {
         Ok(res) => {
             println!("{}", START_INFO);
             info!("加载中.....");
-            info!("将从如下配置启动\n{}", res.0);
+            info!("将从如下配置启动\n{}", res);
 
-            let ban_list = Arc::new(RwLock::new(res.0.banlist));
+            let ban_list = Arc::new(RwLock::new(res.banlist));
 
-            let server_data = tokio::spawn(start_server(res.0.server, ban_list)).await;
+            let server_data = tokio::spawn(start_server(res.server, ban_list)).await;
 
             match server_data {
                 Ok(server_data) => match server_data {
@@ -57,10 +71,9 @@ async fn main() {
             }
         }
         Err(e) => warn!("{}", e),
-    };
+    }
 }
 
-pub type BlockRuntimes = (BlockRuntime, BlockRuntime, BlockRuntime);
 
 async fn command_shell(
     _block_runtimes: BlockRuntimes,
@@ -163,37 +176,16 @@ async fn command_shell(
 async fn start_server(
     server_config: ServerConfig,
     ban_list: Arc<RwLock<Vec<SocketAddr>>>,
-) -> anyhow::Result<(
-    BlockRuntimes,
-    Arc<RwLock<ConnectionManage>>,
-    Arc<RwLock<RelayManage>>,
-)> {
+) {
+
     //准备IP地址信息
     let listen_addr = format!("{}{}", "0.0.0.0:", server_config.port);
 
-    //info!("监听地址：{}", listen_addr);
 
-    let (receiver_block_rt, processor_block_rt, packet_sender_block_rt) = match join!(
-        creat_block_runtime(server_config.thread_number),
-        creat_block_runtime(server_config.thread_number),
-        creat_block_runtime(server_config.thread_number)
-    ) {
-        (Ok(receiver_block_rt), Ok(processor_block_rt), Ok(packet_sender_block_rt)) => (
-            receiver_block_rt,
-            processor_block_rt,
-            packet_sender_block_rt,
-        ),
-        _ => {
-            panic!()
-        }
-    };
 
-    let connection_mg = ConnectionManage::new(
-        packet_sender_block_rt.clone(),
-        receiver_block_rt.clone(),
-        processor_block_rt.clone(),
-    )
-    .await;
+
+    let connection_mg = Arc::new(ConnectionManager::new());
+
 
     let relay_mg = RelayManage::new().await;
 
@@ -205,55 +197,39 @@ async fn start_server(
         ban_list,
         relay_mg.clone(),
     ));
-    Ok((
-        (
-            receiver_block_rt,
-            processor_block_rt,
-            packet_sender_block_rt,
-        ),
-        connection_mg,
-        relay_mg,
-    ))
+    
 }
 
 async fn init_accepter(
     listener: TcpListener,
-    connection_mg: Arc<RwLock<ConnectionManage>>,
+    connection_mg: Arc<ConnectionManager>,
     ban_list: Arc<RwLock<Vec<SocketAddr>>>,
     relay_mg: Arc<RwLock<RelayManage>>,
 ) -> anyhow::Result<()> {
-    //let mut stream_sender = Some(stream_sender);
-    //info!("stream_sender={:?}",stream_sender);
     info!("Accepter注册成功");
     loop {
-        // Asynchronously wait for an inbound socket.
-        let new_con = connection_mg
-            .write()
-            .await
-            .prepare_new_con(relay_mg.clone())
-            .await;
-
         let (socket, addr) = listener.accept().await?;
 
-        if ban_list.read().await.contains(&addr) {
-            info!("来自{}的新连接已被黑名单屏蔽", addr);
-            continue;
-        }
         info!("来自{}的新连接", addr);
-
-        new_con.write().await.bind(addr, socket).await.unwrap();
-        connection_mg.write().await.insert_con(addr, new_con).await;
+        
     }
 }
 
 fn init_shell() -> anyhow::Result<()> {
+    let mut colors = ColoredLevelConfig::new()
+        // use builder methods
+        .info(Color::Green);
+    // or access raw fields
+    colors.warn = Color::Magenta;
+
     Ok(fern::Dispatch::new()
         // Perform allocation-free log formatting
-        .format(|out, message, record| {
+        .format(move |out, message, record| {
             out.finish(format_args!(
                 "[{} {}] {}",
                 humantime::format_rfc3339_seconds(std::time::SystemTime::now()),
-                record.level(),
+                
+                colors.color(record.level()),
                 //record.target(),
                 message
             ))

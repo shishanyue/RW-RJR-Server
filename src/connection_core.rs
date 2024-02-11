@@ -40,6 +40,12 @@ pub struct ConnectionInfo {
     pub is_beta_version: bool,
 }
 
+
+
+pub struct ConnectionChannel{
+    
+}
+
 #[derive(Debug)]
 pub struct Connection {
     pub con: Option<Arc<RwLock<Connection>>>,

@@ -1,12 +1,11 @@
 use std::{
-    net::SocketAddr,
-    sync::{
+    collections::HashSet, net::SocketAddr, sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
-    },
+    }
 };
 
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use log::info;
 use rand::{Rng, SeedableRng};
 use tokio::{
@@ -34,7 +33,15 @@ use crate::{
         sender_core::{sender, SenderData},
     },
 };
-pub type BlockRuntime = Arc<Mutex<Runtime>>;
+
+pub struct GetAndBackChannel<T>{
+    pub get_sender: mpsc::Sender<oneshot::Sender<T>>,
+    pub back_sender: mpsc::Sender<T>,
+}
+
+
+
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum ServerCommand {
@@ -45,164 +52,15 @@ pub enum ServerCommand {
 
 pub type WorkersSender = (mpsc::Sender<ReceiverData>, mpsc::Sender<SenderData>);
 
-#[derive(Debug)]
-pub struct ConnectionManage {
-    pub connections: Arc<DashMap<SocketAddr, Arc<RwLock<Connection>>>>,
-    pub get_worker_sender: mpsc::Sender<oneshot::Sender<WorkersSender>>,
-    pub back_worker_sender: mpsc::Sender<WorkersSender>,
-    pub disconnect_del_con_sender: mpsc::Sender<SocketAddr>,
-    pub receiver_size: Arc<AtomicU32>,
-    pub sender_size: Arc<AtomicU32>,
-    pub processor_size: Arc<AtomicU32>,
-    pub self_arc: Option<Arc<RwLock<Self>>>,
-}
 
-impl ConnectionManage {
-    pub async fn new(
-        sender_rt: BlockRuntime,
-        receiver_rt: BlockRuntime,
-        processor_rt: BlockRuntime,
-    ) -> Arc<RwLock<Self>> {
-        let processor_sorter_sender = tokio::spawn(init_processor_sorter(processor_rt.clone()))
-            .await
-            .unwrap();
-        {
-            let (sender_pool, receiver_pool) = join!(
-                new_worker_pool(
-                    1,
-                    move |s_receiver, _| Box::pin(sender(s_receiver)),
-                    sender_rt,
-                    ()
-                ),
-                new_worker_pool(
-                    1,
-                    move |r_receiver, sorter_sender| Box::pin(receiver(r_receiver, sorter_sender)),
-                    receiver_rt,
-                    processor_sorter_sender.0
-                ),
-            );
-            //let sender_semaphore = Arc::new(Semaphore::new(3));
-            info!("Processor注册成功");
-            info!("Receiver注册成功");
-            info!("Sender注册成功");
-            let (get_worker_sender, get_worker_receiver) = mpsc::channel(10);
-            let (back_worker_sender, back_worker_receiver) = mpsc::channel(10);
 
-            let receiver_size = receiver_pool.1.clone();
-
-            let sender_size = sender_pool.1.clone();
-
-            tokio::spawn(async move {
-                let mut sender_pool = sender_pool;
-                let mut receiver_pool = receiver_pool;
-
-                let mut get_worker_receiver: mpsc::Receiver<oneshot::Sender<WorkersSender>> =
-                    get_worker_receiver;
-
-                let mut back_worker_receiver: mpsc::Receiver<WorkersSender> = back_worker_receiver;
-
-                loop {
-                    tokio::select! {
-                        get_worker_receiver = get_worker_receiver.recv() => {
-                            if let Some(worker_sender) = get_worker_receiver {
-                                let receiver = receiver_pool.0.get_free_worker().await;
-
-                                let packet_sender = sender_pool.0.get_free_worker().await;
-                                worker_sender.send((receiver, packet_sender)).unwrap();
-                            }
-                        }
-                        back_worker_receiver = back_worker_receiver.recv() => {
-                            if let Some((receiver,packet_sender)) = back_worker_receiver {
-                                receiver_pool.0.push_free_worker(receiver).await;
-                                sender_pool.0.push_free_worker(packet_sender).await;
-                            }
-                        }
-                    }
-                }
-            });
-            let (disconnect_del_con_sender, disconnect_del_con_receiver) = mpsc::channel(10);
-            let connection_mg = Arc::new(RwLock::new(ConnectionManage {
-                connections: Arc::new(DashMap::new()),
-                get_worker_sender,
-                back_worker_sender,
-                disconnect_del_con_sender,
-                receiver_size,
-                sender_size,
-                processor_size: processor_sorter_sender.1,
-                self_arc: None,
-            }));
-
-            connection_mg.write().await.self_arc = Some(connection_mg.clone());
-
-            let connection_mg_remove = connection_mg.clone();
-            tokio::spawn(async move {
-                let connection_mg_remove = connection_mg_remove;
-                let mut disconnect_del_con_receiver = disconnect_del_con_receiver;
-                loop {
-                    if let Some(ip) = disconnect_del_con_receiver.recv().await {
-                        connection_mg_remove
-                            .write()
-                            .await
-                            .connections
-                            .remove(&ip)
-                            .unwrap();
-                    }
-                }
-            });
-
-            connection_mg
-        }
-
-        //static SENDER_POOL = new_worker_pool(10, worker_fn, sender_rt);
-    }
-
-    pub async fn prepare_new_con(
-        &mut self,
-        relay_mg: Arc<RwLock<RelayManage>>,
-    ) -> Arc<RwLock<Connection>> {
-        let (command_sender, command_receiver) = broadcast::channel(5);
-
-        let get_worker = oneshot::channel();
-
-        self.get_worker_sender.send(get_worker.0).await.unwrap();
-
-        let Ok((receiver, sender)) = get_worker.1.await else {
-            panic!()
-        };
-
-        Connection::new(
-            command_sender,
-            command_receiver,
-            receiver,
-            sender,
-            relay_mg,
-            self.back_worker_sender.clone(),
-            self.disconnect_del_con_sender.clone(),
-            self.self_arc.as_ref().unwrap().clone(),
-        )
-        .await
-    }
-
-    pub async fn insert_con(&mut self, ip: SocketAddr, con: Arc<RwLock<Connection>>) {
-        self.connections.insert(ip, con);
-    }
-
-    pub async fn remove_con(&mut self, ip: SocketAddr) {
-        if self.connections.contains_key(&ip) {
-            self.connections.remove(&ip);
-        }
-    }
-}
-
-pub async fn creat_block_runtime(threads: usize) -> anyhow::Result<BlockRuntime> {
-    Ok(Arc::new(Mutex::new(
-        Builder::new_multi_thread()
-            .enable_time()
-            .worker_threads(threads)
-            // no timer!
-            .build()
-            .unwrap(),
-    )))
+pub async fn creat_block_runtime(threads: usize) -> anyhow::Result<Runtime> {
+    Ok(Builder::new_multi_thread()
+        .enable_time()
+        .worker_threads(threads)
+        // no timer!
+        .build()
+        .unwrap())
 }
 
 pub type RelayConData = (
