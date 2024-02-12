@@ -25,7 +25,7 @@ pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<
         let Some((con_channel, mut read_half)) = data.recv().await else {
             continue;
         };
-        
+
         tokio::select! {
             packet_length = read_half.read_i32() => {
                 match packet_length {
@@ -34,7 +34,7 @@ pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<
                         let packet_type = PacketType::try_from(read_half.read_u32().await.unwrap()).unwrap_or_default();
 
 
-                        if packet_length <= 0{        
+                        if packet_length <= 0{
                             con_channel.connection_api_sender.send(ConnectionAPI::Disconnect).await.unwrap();
                             continue;
                         }
@@ -53,7 +53,7 @@ pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<
                             packet_type,
                             Cursor::new(packet_buffer)).await;
 
-
+                        con_channel.processor_sorter_sender.send((con_channel.clone(),packet)).await.unwrap();
                     },
                     Err(_) => con_channel.connection_api_sender.send(ConnectionAPI::Disconnect).await.unwrap(),
                 }

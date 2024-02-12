@@ -8,7 +8,7 @@ mod worker_pool_core;
 use std::{
     net::SocketAddr,
     path::Path,
-    sync::{atomic::Ordering, Arc},
+    sync::{atomic::Ordering, Arc}, time::Duration,
 };
 
 use crate::{
@@ -55,9 +55,7 @@ async fn main() {
 
             tokio::spawn(start_server(res.server)).await;
 
-            loop {
-                
-            }
+            std::thread::sleep(Duration::from_millis(u64::MAX));
         }
         Err(e) => {
             warn!("{}", e);
