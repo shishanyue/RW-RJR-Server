@@ -2,8 +2,8 @@ use std::io::Cursor;
 
 use std::{sync::Arc, usize};
 
-use crate::connection_core::Connection;
-use crate::core::{ ServerCommand};
+use crate::connection_core::{Connection, ConnectionAPI, ConnectionChannel};
+use crate::core::ServerCommand;
 use crate::packet_core::{Packet, PacketType};
 
 use tokio::runtime::Runtime;
@@ -18,81 +18,46 @@ use tokio::{
 
 use super::processor_core::ProcesseorData;
 
-pub type ReceiverData = (
-    OwnedReadHalf
-);
+pub type ReceiverData = (Arc<ConnectionChannel>, OwnedReadHalf);
 
-
-pub async fn receiver(
-    mut read_h_receiver: mpsc::Receiver<ReceiverData>,
-    sorter_sender: mpsc::Sender<ProcesseorData>,
-) -> anyhow::Result<()> {
+pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<()> {
     loop {
-        match read_h_receiver.recv().await {
-            Some((mut command_receiver, con, mut read_half, packet_sender)) => loop {
-                let _player_info = con.read().await.player_info.clone();
+        let Some((con_channel, mut read_half)) = data.recv().await else {
+            continue;
+        };
+        
+        tokio::select! {
+            packet_length = read_half.read_i32() => {
+                match packet_length {
+                    Ok(packet_length) => {
 
-                tokio::select! {
-                    packet_length = read_half.read_i32() => {
-                        match packet_length {
-                            Ok(packet_length) => {
-
-                                let packet_type = PacketType::try_from(read_half.read_u32().await.unwrap()).unwrap_or_default();
-
-
-                                if packet_length <= 0{
-                                    con.write().await.disconnect().await;
-                                    continue;
-                                }
-
-                                if packet_length >= 1024*50||packet_type == PacketType::NOT_RESOLVED{
-                                    con.write().await.disconnect().await;
-                                    continue;
-                                }
+                        let packet_type = PacketType::try_from(read_half.read_u32().await.unwrap()).unwrap_or_default();
 
 
-
-                                let mut packet_buffer = vec![0; packet_length as usize];
-                                read_half.read_exact(&mut packet_buffer).await.unwrap();
-
-
-                                let packet = Packet::decode_from_buffer(
-                                    packet_length as u32,
-                                    packet_type,
-                                    Cursor::new(packet_buffer)).await;
-
-                                  //println!("{:?}",packet);
-
-
-                                sorter_sender
-                                    .send((con.clone(), packet_sender.clone(), packet))
-                                    .await
-                                    .unwrap();
-
-
-                            },
-                            Err(_) => con.write().await.disconnect().await,
+                        if packet_length <= 0{        
+                            con_channel.connection_api_sender.send(ConnectionAPI::Disconnect).await.unwrap();
+                            continue;
                         }
-                    }
 
-                    command = command_receiver.recv() => {
-                        match command {
-                            Ok(command) => {
-                                match command {
-                                    ServerCommand::Disconnect => {
-                                        break;
-                                    },
-                                    ServerCommand::None => {},
-                                }
-                            },
-                            Err(e) => panic!("{}", e),
+                        if packet_length >= 1024*50||packet_type == PacketType::NOT_RESOLVED{
+                            con_channel.connection_api_sender.send(ConnectionAPI::Disconnect).await.unwrap();
+                            continue;
                         }
-                    }
+
+                        let mut packet_buffer = vec![0; packet_length as usize];
+                        read_half.read_exact(&mut packet_buffer).await.unwrap();
+
+
+                        let packet = Packet::decode_from_buffer(
+                            packet_length as u32,
+                            packet_type,
+                            Cursor::new(packet_buffer)).await;
+
+
+                    },
+                    Err(_) => con_channel.connection_api_sender.send(ConnectionAPI::Disconnect).await.unwrap(),
                 }
-            },
-            None => {
-                continue;
-            } //
+            }
         }
     }
 }

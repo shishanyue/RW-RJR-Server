@@ -28,7 +28,6 @@ use crate::{
     packet_core::{Packet, PacketType},
     worker_pool_core::{
         new_worker_pool,
-        processor_core::init_processor_sorter,
         receiver_core::{receiver, ReceiverData},
         sender_core::{sender, SenderData},
     },

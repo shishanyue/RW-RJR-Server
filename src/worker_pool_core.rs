@@ -37,6 +37,38 @@ where
     pub worker_size: Arc<AtomicU32>,
 }
 
+impl<'a, D, R, F, EWA> WorkerPool<D, R, F, EWA>
+where
+    Self: 'static,
+    F: FnOnce(
+            mpsc::Receiver<D>,
+            EWA,
+        ) -> Pin<Box<dyn Future<Output = Result<R, anyhow::Error>> + Send + 'static>>
+        + Copy,
+    R: Sync + Send + 'static,
+    EWA: Clone, {
+    pub async fn get_free_worker(&mut self) -> mpsc::Sender<D> {
+        match self.free_worker.pop() {
+            Some(receiver) => receiver,
+            None => {
+                let new_receiver = create_worker(
+                    self.worker_fn,
+                    &mut self.runtime,
+                    self.extra_worker_arg.clone(),
+                )
+                .await;
+                self.worker_handle.push(new_receiver.0);
+                self.worker_size.fetch_add(1, Ordering::Relaxed);
+                new_receiver.1
+            }
+        }
+    }
+
+    pub async fn push_free_worker(&mut self, worker: mpsc::Sender<D>) {
+        self.free_worker.push(worker);
+    }
+}
+
 async fn create_worker<D, R, F, EWA>(
     worker_fn: F,
     runtime: &mut Runtime,

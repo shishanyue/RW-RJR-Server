@@ -5,8 +5,6 @@ mod data;
 mod packet_core;
 mod server_core;
 mod worker_pool_core;
-mod worker_pool_manager;
-
 use std::{
     net::SocketAddr,
     path::Path,
@@ -14,7 +12,7 @@ use std::{
 };
 
 use crate::{
-    core::{creat_block_runtime, RelayManage},
+    core::RelayManage,
     data::{COMMAND_HELP, START_INFO},
     server_core::config::*,
 };
@@ -26,7 +24,6 @@ use log::{info, warn};
 use server_core::ServerConfig;
 
 use tokio::net::TcpListener;
-use worker_pool_manager::WorkerPoolManager;
 
 #[tokio::main]
 async fn main() {
@@ -57,6 +54,10 @@ async fn main() {
             info!("将从如下配置启动\n{}", res);
 
             tokio::spawn(start_server(res.server)).await;
+
+            loop {
+                
+            }
         }
         Err(e) => {
             warn!("{}", e);
@@ -65,18 +66,17 @@ async fn main() {
     }
 }
 
-async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
+async fn start_server(server_config: ServerConfig) -> anyhow::Result<Arc<ConnectionManager>> {
     //准备IP地址信息
     let listen_addr = format!("{}{}", "0.0.0.0:", server_config.port);
 
-    let worker_pool_mg = Arc::new(WorkerPoolManager::new(server_config).await?);
-    let connection_mg = Arc::new(ConnectionManager::new(worker_pool_mg.clone()));
+    let connection_mg = Arc::new(ConnectionManager::new(server_config).await);
 
     let listener = TcpListener::bind(&listen_addr).await?;
 
     tokio::spawn(init_accepter(listener, connection_mg.clone()));
 
-    Ok(())
+    Ok(connection_mg)
 }
 
 async fn init_accepter(
