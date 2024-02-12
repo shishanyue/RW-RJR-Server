@@ -3,10 +3,11 @@ use std::io::Cursor;
 use std::{sync::Arc, usize};
 
 use crate::connection_core::Connection;
-use crate::core::ServerCommand;
+use crate::core::{ ServerCommand};
 use crate::packet_core::{Packet, PacketType};
 
 use tokio::runtime::Runtime;
+use tokio::select;
 use tokio::sync::broadcast;
 
 use tokio::{
@@ -15,34 +16,12 @@ use tokio::{
     sync::{mpsc, RwLock},
 };
 
-use super::new_worker_pool;
 use super::processor_core::ProcesseorData;
 
 pub type ReceiverData = (
-    broadcast::Receiver<ServerCommand>,
-    Arc<RwLock<Connection>>,
-    OwnedReadHalf,
-    mpsc::Sender<Packet>,
+    OwnedReadHalf
 );
 
-
-
-
-pub async fn init_receiver_sorter(receiver_rt:Runtime) -> mpsc::Sender<OwnedReadHalf>{
-    let receiver_pool = new_worker_pool(
-        1,
-        move |w_receiver, _| Box::pin(receiver(w_receiver)),
-        receiver_rt,
-        (),
-    )
-    .await;
-
-
-    let receiver_sorter_h = receiver_rt.spawn(async move{
-
-    });
-
-}
 
 pub async fn receiver(
     mut read_h_receiver: mpsc::Receiver<ReceiverData>,

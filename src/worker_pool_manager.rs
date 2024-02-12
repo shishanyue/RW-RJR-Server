@@ -1,7 +1,6 @@
 use crate::{creat_block_runtime, server_core::ServerConfig};
 use tokio::{
-    join,
-    runtime::{Builder, Runtime},
+    join, net::tcp::OwnedReadHalf, runtime::{Builder, Runtime}, sync::mpsc
 };
 
 use crate::worker_pool_core::{
@@ -10,7 +9,10 @@ use crate::worker_pool_core::{
     receiver_core::init_receiver_sorter,
 };
 
-struct WorkerPoolManager {}
+pub struct WorkerPoolManager {
+    pub receiver:mpsc::Sender<OwnedReadHalf>
+
+}
 impl WorkerPoolManager {
     pub async fn new(server_config: ServerConfig) -> anyhow::Result<Self> {
         let (receiver_block_rt, processor_block_rt, packet_sender_block_rt) = match join!(
@@ -35,7 +37,7 @@ impl WorkerPoolManager {
             .build()
             .expect("worker manager create error!");
 
-        let receiver_pool_h = worker_mg_rt
+        let receiver = worker_mg_rt
             .spawn(init_receiver_sorter(receiver_block_rt))
             .await?;
 
@@ -43,6 +45,6 @@ impl WorkerPoolManager {
             .spawn(init_processor_sorter(processor_block_rt))
             .await?;
 
-        Ok(())
+        Ok(WorkerPoolManager { receiver })
     }
 }

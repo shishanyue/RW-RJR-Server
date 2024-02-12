@@ -7,46 +7,13 @@ use tokio::{runtime::Runtime, sync::{
 
 use crate::{
     connection_core::{permission_status::PermissionStatus, Connection},
-    core::BlockRuntime,
     packet_core::{Packet, PacketType},
 };
 
 use super::new_worker_pool;
 
-pub type ProcesseorData = (Arc<RwLock<Connection>>, mpsc::Sender<Packet>, Packet);
+pub type ProcesseorData = ();
 
-pub async fn init_processor_sorter(
-    processor_rt: Runtime,
-) -> (mpsc::Sender<ProcesseorData>, Arc<AtomicU32>) {
-    let (packet_process_sender, mut packet_process_receiver) = mpsc::channel::<ProcesseorData>(10);
-
-
-
-    let processor_size = processor_pool.1.clone();
-
-    tokio::spawn(async move {
-        let processor_pool = Arc::new(Mutex::new(processor_pool));
-        //let mut receiver = Some(tcp_receiver);
-        loop {
-            let processor = processor_pool.lock().await.0.get_free_worker().await;
-            if let Some(data) = packet_process_receiver.recv().await {
-                let temporary_processor_pool = processor_pool.clone();
-                tokio::spawn(async move {
-                    processor.send(data).await.unwrap();
-                    //println!("processor_size{}",temporary_processor_pool.lock().await.worker_size);
-                    temporary_processor_pool
-                        .lock()
-                        .await
-                        .0
-                        .push_free_worker(processor)
-                        .await;
-                });
-            }
-        }
-    });
-
-    (packet_process_sender, processor_size)
-}
 
 pub async fn processor(mut data_receiver: mpsc::Receiver<ProcesseorData>) -> anyhow::Result<()> {
     loop {

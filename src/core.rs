@@ -34,13 +34,6 @@ use crate::{
     },
 };
 
-pub struct GetAndBackChannel<T>{
-    pub get_sender: mpsc::Sender<oneshot::Sender<T>>,
-    pub back_sender: mpsc::Sender<T>,
-}
-
-
-
 
 
 #[derive(Debug, Clone, Copy)]
