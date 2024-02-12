@@ -6,6 +6,7 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
 };
 
+use log::info;
 use tokio::{
     join,
     net::TcpStream,
@@ -31,7 +32,7 @@ use crate::core::creat_block_runtime;
 pub struct ConnectionManager {
     pub new_connection_sender: mpsc::Sender<(TcpStream, SocketAddr)>,
     pub handle_vec: Vec<JoinHandle<()>>,
-    runtime:Runtime
+    runtime: Runtime,
 }
 
 impl ConnectionManager {
@@ -76,6 +77,10 @@ impl ConnectionManager {
             (),
         )
         .await;
+
+        info!("Processor注册成功");
+        info!("Receiver注册成功");
+        info!("Sender注册成功");
 
         //创建ConnectionManager的异步运行时
         let connection_mg_rt = creat_block_runtime(3)
@@ -127,15 +132,15 @@ impl ConnectionManager {
                 );
                 let (read_half, write_half) = socket.into_split();
                 new_con
-                    .0
+                    .1
                     .receiver
-                    .send((new_con.0.clone(), read_half))
+                    .send((new_con.1.clone(), read_half))
                     .await
                     .unwrap();
                 new_con
-                    .0
+                    .1
                     .sender
-                    .send((new_con.0.clone(), write_half))
+                    .send((new_con.1.clone(), write_half))
                     .await
                     .unwrap();
                 insert_connection_sender
@@ -164,7 +169,7 @@ impl ConnectionManager {
         ConnectionManager {
             new_connection_sender: new_connection_sender,
             handle_vec,
-            runtime:connection_mg_rt
+            runtime: connection_mg_rt,
         }
     }
 }

@@ -1,7 +1,7 @@
 pub mod permission_status;
 pub mod player_net_api;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{borrow::Cow, net::SocketAddr, sync::Arc};
 
 use log::{info, warn};
 use tokio::{
@@ -33,8 +33,8 @@ use self::{
 static NEW_RELAY_PROTOCOL_VERSION: u32 = 172;
 
 #[derive(Debug, Default)]
-pub struct PlayerInfo {
-    pub permission_status: PermissionStatus,
+pub struct PlayerInfo<'a> {
+    pub permission_status: Cow<'a,PermissionStatus>,
     pub player_name: String,
 }
 
@@ -55,12 +55,15 @@ pub struct ConnectionChannel {
 #[derive(Debug)]
 pub enum ConnectionAPI {
     Disconnect,
+    WritePacket(Packet)
 }
 
 #[derive(Debug)]
-pub struct Connection {
+pub struct Connection<'a> {
     pub connection_channel: Arc<ConnectionChannel>,
     pub addr: SocketAddr,
+    pub shared_data:Arc<SharedConnectionData<'a>>,
+    pub packet: Option<Packet>,
 }
 
 impl ConnectionChannel {
@@ -79,13 +82,19 @@ impl ConnectionChannel {
     }
 }
 
+#[derive(Debug,Default)]
+pub struct SharedConnectionData<'a>{
+    pub player_info: Arc<PlayerInfo<'a>>,
+    pub connection_info: Arc<ConnectionInfo>,
+}
 
 
-pub type SharedConnection = (Arc<ConnectionChannel>, JoinHandle<()>);
+pub type SharedConnection<'a> = (Arc<SharedConnectionData<'a>>,Arc<ConnectionChannel>, JoinHandle<()>);
 
-impl Connection {
+impl<'a> Connection<'a>
+{
     pub fn new(
-        runtime: &mut Runtime,
+        runtime: &'a mut Runtime,
         new_receiver: mpsc::Sender<ReceiverData>,
         new_sender: mpsc::Sender<SenderData>,
         processor_sorter_sender: mpsc::Sender<ProcesseorData>,
@@ -100,12 +109,17 @@ impl Connection {
             connection_api_sender,
         ));
 
+        let shared_data = Arc::new(SharedConnectionData::default());
+
+
         let con = Connection {
             connection_channel: connection_channel.clone(),
             addr: addr,
+            shared_data:shared_data.clone(),
+            packet: None,
         };
 
-        (
+        (shared_data,
             connection_channel,
             runtime.spawn(async move {
                 let con = con;
@@ -115,6 +129,7 @@ impl Connection {
                         ConnectionAPI::Disconnect => {
 
                         },
+                        ConnectionAPI::WritePacket(packet) => con.packet = Some(packet),
                     }
                 }
             }),
