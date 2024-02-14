@@ -123,7 +123,7 @@ impl ConnectionManager {
                     continue;
                 };
 
-                let new_con = Connection::new(
+                let new_con = Connection::new_shared(
                     &mut connection_rt,
                     new_receiver,
                     new_sender,

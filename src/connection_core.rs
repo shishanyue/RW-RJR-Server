@@ -1,7 +1,11 @@
 pub mod permission_status;
 pub mod player_net_api;
 
-use std::{borrow::Cow, net::SocketAddr, sync::Arc};
+use std::{
+    borrow::Cow,
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 
 use log::{info, warn};
 use tokio::{
@@ -9,13 +13,12 @@ use tokio::{
     join,
     net::TcpStream,
     runtime::Runtime,
-    sync::{broadcast, mpsc, oneshot, RwLock, Semaphore},
+    sync::{broadcast, mpsc, oneshot, Semaphore},
     task::JoinHandle,
 };
 use uuid::Uuid;
 
 use crate::{
-    connection_core::player_net_api::{read_if_is_string, read_string},
     core::{RelayManage, RelayRoomData, ServerCommand, WorkersSender},
     packet_core::{Packet, PacketType},
     worker_pool_core::{
@@ -25,16 +28,14 @@ use crate::{
 
 use self::{
     permission_status::PermissionStatus,
-    player_net_api::{
-        write_is_string, write_string, CustomRelayData, PlayerAllInfo, RelayDirectInspection,
-    },
+    player_net_api::{CustomRelayData, PlayerAllInfo, RelayDirectInspection},
 };
 
 static NEW_RELAY_PROTOCOL_VERSION: u32 = 172;
 
 #[derive(Debug, Default)]
-pub struct PlayerInfo<'a> {
-    pub permission_status: Cow<'a,PermissionStatus>,
+pub struct PlayerInfo {
+    pub permission_status: RwLock<PermissionStatus>,
     pub player_name: String,
 }
 
@@ -55,14 +56,14 @@ pub struct ConnectionChannel {
 #[derive(Debug)]
 pub enum ConnectionAPI {
     Disconnect,
-    WritePacket(Packet)
+    WritePacket(Packet),
 }
 
 #[derive(Debug)]
-pub struct Connection<'a> {
+pub struct Connection {
     pub connection_channel: Arc<ConnectionChannel>,
     pub addr: SocketAddr,
-    pub shared_data:Arc<SharedConnectionData<'a>>,
+    pub shared_data: Arc<SharedConnectionData>,
     pub packet: Option<Packet>,
 }
 
@@ -82,19 +83,21 @@ impl ConnectionChannel {
     }
 }
 
-#[derive(Debug,Default)]
-pub struct SharedConnectionData<'a>{
-    pub player_info: Arc<PlayerInfo<'a>>,
+#[derive(Debug, Default)]
+pub struct SharedConnectionData {
+    pub player_info: Arc<PlayerInfo>,
     pub connection_info: Arc<ConnectionInfo>,
 }
 
+pub type SharedConnection = (
+    Arc<SharedConnectionData>,
+    Arc<ConnectionChannel>,
+    JoinHandle<()>,
+);
 
-pub type SharedConnection<'a> = (Arc<SharedConnectionData<'a>>,Arc<ConnectionChannel>, JoinHandle<()>);
-
-impl<'a> Connection<'a>
-{
-    pub fn new(
-        runtime: &'a mut Runtime,
+impl Connection {
+    pub fn new_shared(
+        runtime: &mut Runtime,
         new_receiver: mpsc::Sender<ReceiverData>,
         new_sender: mpsc::Sender<SenderData>,
         processor_sorter_sender: mpsc::Sender<ProcesseorData>,
@@ -111,24 +114,26 @@ impl<'a> Connection<'a>
 
         let shared_data = Arc::new(SharedConnectionData::default());
 
-
         let con = Connection {
             connection_channel: connection_channel.clone(),
             addr: addr,
-            shared_data:shared_data.clone(),
+            shared_data: shared_data.clone(),
             packet: None,
         };
 
-        (shared_data,
+        (
+            shared_data,
             connection_channel,
             runtime.spawn(async move {
-                let con = con;
+                let mut con = con;
                 let mut connection_api_receiver = connection_api_receiver;
                 loop {
-                    match connection_api_receiver.recv().await.expect("Connection接收错误") {
-                        ConnectionAPI::Disconnect => {
-
-                        },
+                    match connection_api_receiver
+                        .recv()
+                        .await
+                        .expect("Connection接收错误")
+                    {
+                        ConnectionAPI::Disconnect => {}
                         ConnectionAPI::WritePacket(packet) => con.packet = Some(packet),
                     }
                 }

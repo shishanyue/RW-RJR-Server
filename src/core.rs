@@ -1,8 +1,10 @@
 use std::{
-    collections::HashSet, net::SocketAddr, sync::{
+    collections::HashSet,
+    net::SocketAddr,
+    sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
-    }
+    },
 };
 
 use dashmap::{DashMap, DashSet};
@@ -22,18 +24,16 @@ use tokio::{
 
 use crate::{
     connection_core::{
-        player_net_api::{read_stream_bytes, CustomRelayData, PlayerAllInfo},
+        player_net_api::{CustomRelayData, PlayerAllInfo},
         Connection,
     },
-    packet_core::{Packet, PacketType},
+    packet_core::{Packet, PacketReadWriteExt, PacketType},
     worker_pool_core::{
         new_worker_pool,
         receiver_core::{receiver, ReceiverData},
         sender_core::{sender, SenderData},
     },
 };
-
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum ServerCommand {
@@ -43,8 +43,6 @@ pub enum ServerCommand {
 }
 
 pub type WorkersSender = (mpsc::Sender<ReceiverData>, mpsc::Sender<SenderData>);
-
-
 
 pub async fn creat_block_runtime(threads: usize) -> anyhow::Result<Runtime> {
     Ok(Builder::new_multi_thread()
@@ -299,7 +297,7 @@ pub async fn relay_packet_sender(room: Arc<RwLock<RelayRoom>>, mut packet: Packe
     let target = packet.packet_buffer.read_u32().await.unwrap();
     let packet_type = packet.packet_buffer.read_u32().await.unwrap();
 
-    let bytes = read_stream_bytes(&mut packet).await;
+    let bytes = packet.read_stream_bytes().await;
 
     if packet_type == PacketType::DISCONNECT as u32 {
         return;

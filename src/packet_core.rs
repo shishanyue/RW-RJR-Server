@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use num_enum::TryFromPrimitive;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
@@ -126,5 +126,52 @@ impl Packet {
             self.packet_buffer.write_u32(packet_type).await.unwrap();
             self.is_prepared = true;
         }
+    }
+}
+
+pub trait PacketReadWriteExt {
+    async fn read_string(&mut self) -> Option<String>;
+    async fn read_if_is_string(&mut self) -> Option<String>;
+    async fn write_string(&mut self, s: &str) -> std::io::Result<usize>;
+    async fn write_is_string(&mut self, s: &str) -> std::io::Result<usize>;
+    async fn read_stream_bytes(&mut self) -> Vec<u8>;
+}
+
+impl PacketReadWriteExt for Packet {
+    async fn read_string(&mut self) -> Option<String> {
+        let str_len = self.packet_buffer.read_u16().await.unwrap();
+        let mut str = vec![0; str_len as usize];
+        self.packet_buffer.read_exact(&mut str).await.unwrap();
+        Some(String::from_utf8_lossy(&str).to_string())
+    }
+    async fn read_if_is_string(&mut self) -> Option<String> {
+        if self.packet_buffer.read_u8().await.unwrap() == 1 {
+            self.read_string().await
+        } else {
+            None
+        }
+    }
+    async fn write_string(&mut self, s: &str) -> std::io::Result<usize> {
+        self.packet_buffer.write_u16(s.len() as u16).await.unwrap();
+        self.packet_buffer.write(s.as_bytes()).await
+    }
+    async fn write_is_string(&mut self, s: &str) -> std::io::Result<usize> {
+        if s.is_empty() {
+            self.packet_buffer.write_u8(0).await.unwrap();
+            Ok(0)
+        } else {
+            self.packet_buffer.write_u8(1).await.unwrap();
+            self.write_string(s).await
+        }
+    }
+    async fn read_stream_bytes(&mut self) -> Vec<u8> {
+        let mut packet_bytes = vec![0; self.packet_buffer.read_u32().await.unwrap() as usize];
+
+        self.packet_buffer
+            .read_exact(&mut packet_bytes)
+            .await
+            .unwrap();
+
+        packet_bytes
     }
 }
