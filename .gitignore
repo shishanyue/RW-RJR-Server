@@ -2,6 +2,6 @@
 /target/*
 .vscode/*
 output.log
-*.toml
 /dummy
 /dummy/*
+config.toml
