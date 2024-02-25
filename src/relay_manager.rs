@@ -2,11 +2,10 @@ pub mod relay;
 
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicU32, Arc, RwLock, Weak},
+    sync::{Arc, RwLock},
 };
 
-use dashmap::DashMap;
-use rand::{seq::index, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
 use tokio::{
     runtime::Runtime,
     sync::{mpsc, oneshot},
@@ -19,7 +18,7 @@ use crate::{
     NOW,
 };
 
-use self::relay::{RelayRoom, SharedRelayRoom};
+use self::relay::SharedRelayRoom;
 
 #[derive(Debug)]
 pub enum RelayManagerAPI {
@@ -35,7 +34,8 @@ struct RelayManager {
 #[derive(Debug)]
 pub struct SharedRelayManager {
     relay_mg_api_tx: mpsc::Sender<RelayManagerAPI>,
-    handle: JoinHandle<()>,
+    // not used yet
+    _handle: JoinHandle<()>,
     pub relay_rt: Arc<Runtime>,
     pub id_rand: Arc<RwLock<rand::rngs::StdRng>>,
 }
@@ -63,8 +63,7 @@ impl SharedRelayManager {
                     .expect("recv relay mg api error")
                 {
                     RelayManagerAPI::GetRelay(id, relay_index_tx) => {
-                        let id = format!("S{}",id);
-
+                        let id = format!("S{}", id);
 
                         let mut shared_relay = None;
                         for (relay_id, shared) in relay_mg.room_map.iter() {
@@ -87,7 +86,7 @@ impl SharedRelayManager {
 
         Arc::new(Self {
             relay_mg_api_tx,
-            handle,
+            _handle: handle,
             relay_rt: runtime,
             id_rand: Arc::new(RwLock::new(SeedableRng::seed_from_u64(
                 NOW.elapsed().as_secs(),
@@ -125,11 +124,10 @@ impl SharedRelayManager {
                     .gen_range(100..9999)
                     .to_string();
                 if (self.get_relay(&tmp_id).await).is_none() {
-                    break format!("S{}",tmp_id);
+                    break format!("S{}", tmp_id);
                 }
             }
         };
-
 
         let shared_relay_room =
             SharedRelayRoom::new_shared(&self.relay_rt, Arc::downgrade(&admin), id, custom).await;

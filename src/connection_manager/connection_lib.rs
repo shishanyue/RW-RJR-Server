@@ -2,22 +2,17 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use crate::connection::shared_connection::SharedConnection;
 
-
-
-
-
-
-
 pub struct ConnectionLib {
     addr_map: HashMap<Arc<SocketAddr>, Arc<SharedConnection>>, //main key
-    player_name_map: HashMap<String, SocketAddr>,
+    // TODO: use it
+    _player_name_map: HashMap<String, SocketAddr>,
 }
 
 impl ConnectionLib {
     pub fn new() -> Self {
         ConnectionLib {
             addr_map: HashMap::new(),
-            player_name_map: HashMap::new(),
+            _player_name_map: HashMap::new(),
         }
     }
 

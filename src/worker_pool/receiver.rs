@@ -5,21 +5,13 @@ use std::io::Cursor;
 use std::{sync::Arc, usize};
 
 use crate::connection::shared_connection::SharedConnection;
-use crate::connection::{Connection, ConnectionAPI, ConnectionChannel};
 use crate::core::ServerCommand;
 use crate::packet::{Packet, PacketType};
 use crate::worker_pool::receiver::error::ErrorKind;
 
-use log::warn;
-use tokio::runtime::Runtime;
-use tokio::select;
 use tokio::sync::broadcast;
 
-use tokio::{
-    io::AsyncReadExt,
-    net::tcp::OwnedReadHalf,
-    sync::{mpsc, RwLock},
-};
+use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf, sync::mpsc};
 
 use self::error::Error;
 
@@ -59,7 +51,7 @@ async fn receiver_fn(read_half: &mut OwnedReadHalf) -> anyhow::Result<Packet> {
 
 pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<()> {
     loop {
-        let Some((shared_con, mut read_half,mut command_rx)) = data.recv().await else {
+        let Some((shared_con, mut read_half, mut command_rx)) = data.recv().await else {
             continue;
         };
 

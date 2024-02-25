@@ -7,8 +7,8 @@ use tokio::{join, net::TcpStream, runtime::Runtime, sync::mpsc, task::JoinHandle
 
 use crate::connection::ConnectionLibAPI;
 use crate::relay_manager::SharedRelayManager;
+use crate::worker_pool::receiver::receiver;
 use crate::worker_pool::sender::sender;
-use crate::{connection::shared_connection::SharedConnection, worker_pool::receiver::receiver};
 use crate::{
     connection::Connection,
     server::ServerConfig,
@@ -25,7 +25,8 @@ pub struct ConnectionManager {
     new_con_tx: Option<mpsc::Sender<NewConnectionData>>,
     handle_vec: Vec<JoinHandle<()>>,
     runtime: Option<Arc<Runtime>>,
-    connection_runtime: Option<Runtime>,
+    // TODO: use it
+    _connection_runtime: Option<Runtime>,
     shared_relay_mg: Arc<SharedRelayManager>,
 }
 
@@ -191,7 +192,7 @@ impl ConnectionManager {
                     {
                         ConnectionLibAPI::RemoveConnectionByAddr(addr) => {
                             connection_lib.remove_by_addr(addr)
-                        },
+                        }
                         ConnectionLibAPI::InsertConnection(shared_con) => {
                             connection_lib.insert(shared_con)
                         }
@@ -212,7 +213,7 @@ impl ConnectionManager {
                     .await
                     .expect("connection manager runtime create error!"),
             )),
-            connection_runtime: Some(
+            _connection_runtime: Some(
                 creat_block_runtime(con_thread_number)
                     .await
                     .expect("connection runtime create error!"),

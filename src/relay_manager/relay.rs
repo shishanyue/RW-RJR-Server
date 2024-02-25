@@ -6,13 +6,11 @@ use std::{
     },
 };
 
-use dashmap::DashMap;
-use rand::seq::index;
 use tokio::{runtime::Runtime, sync::mpsc, task::JoinHandle};
 
 use crate::{
     connection::{player_net_api::CustomRelayData, shared_connection::SharedConnection},
-    packet::{self, Packet},
+    packet::Packet,
 };
 #[derive(Debug)]
 pub struct SharedRelayRoomData {
@@ -25,7 +23,7 @@ pub struct SharedRelayRoomData {
 pub enum RelayRoomAPI {
     SendToHost(Packet),
     AddRelayPlayer(Arc<SharedConnection>),
-    SendToOthers(u32,Packet)
+    SendToOthers(u32, Packet),
 }
 #[derive(Debug)]
 pub struct RelayRoom {
@@ -49,7 +47,8 @@ impl RelayRoom {
 #[derive(Debug)]
 pub struct SharedRelayRoom {
     pub shared_data: Arc<SharedRelayRoomData>,
-    handle: JoinHandle<()>,
+    // TODO: handle the error
+    _handle: JoinHandle<()>,
     relay_api_tx: mpsc::Sender<RelayRoomAPI>,
 }
 
@@ -75,7 +74,7 @@ impl SharedRelayRoom {
         let (relay_room_tx, relay_room_rx) = std::sync::mpsc::channel();
 
         let handle = runtime.spawn(async move {
-            let mut relay_room_rx = relay_room_rx;
+            let relay_room_rx = relay_room_rx;
             let mut relay_api_rx = relay_api_rx;
             let mut relay_room: RelayRoom = relay_room_rx.recv().expect("relay room recv error");
 
@@ -83,10 +82,7 @@ impl SharedRelayRoom {
             loop {
                 match relay_api_rx.recv().await.expect("Relay API recv error") {
                     RelayRoomAPI::SendToHost(packet) => match relay_room.admin.upgrade() {
-                        Some(admin) => {
-
-                            admin.send_packet(packet).await
-                        },
+                        Some(admin) => admin.send_packet(packet).await,
                         None => todo!(),
                     },
                     RelayRoomAPI::AddRelayPlayer(shared_con) => {
@@ -97,16 +93,16 @@ impl SharedRelayRoom {
                             .player_map
                             .insert(index, Arc::downgrade(&shared_con));
 
-                            shared_con.add_relay_connect().await;
+                        shared_con.add_relay_connect().await;
                     }
 
                     RelayRoomAPI::SendToOthers(index, packet) => {
                         match relay_room.player_map.get(&index) {
                             Some(weak_shared) => {
-                                if let Some(other) = weak_shared.upgrade(){
+                                if let Some(other) = weak_shared.upgrade() {
                                     other.send_packet(packet).await
                                 }
-                            },
+                            }
                             None => todo!(),
                         }
                     }
@@ -116,29 +112,36 @@ impl SharedRelayRoom {
 
         let shared_relay_room = Arc::new(Self {
             shared_data,
-            handle,
+            _handle: handle,
             relay_api_tx,
         });
         let relay_room = RelayRoom::new(admin, shared_relay_room.clone());
-        relay_room_tx.send(relay_room);
+        // TODO: handle the error
+        let _ = relay_room_tx.send(relay_room);
         shared_relay_room
     }
 
     pub async fn add_relay_player(&self, shared_con: Arc<SharedConnection>) {
-        self.relay_api_tx
+        // TODO: handle the error
+        let _ = self
+            .relay_api_tx
             .send(RelayRoomAPI::AddRelayPlayer(shared_con))
             .await;
     }
 
     pub async fn send_packet_to_host(&self, packet: Packet) {
-        self.relay_api_tx
+        // TODO: handle the error
+        let _ = self
+            .relay_api_tx
             .send(RelayRoomAPI::SendToHost(packet))
             .await;
     }
 
-    pub async fn send_packet_to_others(&self,index:u32, packet: Packet) {
-        self.relay_api_tx
-            .send(RelayRoomAPI::SendToOthers(index,packet))
+    pub async fn send_packet_to_others(&self, index: u32, packet: Packet) {
+        // TODO: handle the error
+        let _ = self
+            .relay_api_tx
+            .send(RelayRoomAPI::SendToOthers(index, packet))
             .await;
     }
 }

@@ -1,6 +1,6 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, RwLock, Weak},
+    sync::{Arc, Weak},
 };
 
 use tokio::{
@@ -10,7 +10,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::packet::{self, Packet};
+use crate::packet::Packet;
 
 use super::{
     player_net_api::RelayDirectInspection, Connection, ConnectionAPI, ConnectionChannel,
@@ -110,7 +110,11 @@ impl SharedConnection {
 
         self.shared_channel
             .receiver
-            .send((shared_self.clone(), read_half,self.shared_channel.command_rx.resubscribe()))
+            .send((
+                shared_self.clone(),
+                read_half,
+                self.shared_channel.command_rx.resubscribe(),
+            ))
             .await
             .expect("bind receiver error");
 
@@ -119,42 +123,53 @@ impl SharedConnection {
             .send((
                 shared_self,
                 self.shared_channel.packet_rx.clone(),
-                write_half,self.shared_channel.command_rx.resubscribe()
+                write_half,
+                self.shared_channel.command_rx.resubscribe(),
             ))
             .await
             .expect("bind sender error");
     }
 
     pub async fn type_relay(&self, shared_self: Arc<SharedConnection>, packet: Packet) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .processor_sorter_tx
             .send((shared_self, packet))
             .await;
     }
 
     pub async fn set_packet(&self, packet: Packet) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetPacket(packet))
             .await;
     }
 
     pub async fn set_cache_packet(&self, cache_packet: Packet) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetCachePacket(cache_packet))
             .await;
     }
 
     pub async fn send_relay_server_info(&self) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayServerInfo)
             .await;
     }
 
     pub async fn get_ping_data(&self) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::GetPingData)
             .await;
@@ -169,28 +184,36 @@ impl SharedConnection {
     }
 
     pub async fn send_relay_hall_message(&self, msg: &str) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayHallMessage(msg.to_string()))
             .await;
     }
 
     pub async fn set_room_index(&self, index: u32) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetRoomIndex(Some(index)))
             .await;
     }
 
     pub async fn add_relay_connect(&self) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::AddRelayConnect)
             .await;
     }
 
     pub async fn disconnect(&self) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::Disconnect)
             .await;
@@ -198,7 +221,10 @@ impl SharedConnection {
 
     pub async fn relay_direct_inspection(&self) -> Option<RelayDirectInspection> {
         let (inspection_data_tx, inspection_data_rx) = oneshot::channel();
-        self.shared_channel
+
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::RelayDirectInspection(inspection_data_tx))
             .await;
@@ -209,28 +235,36 @@ impl SharedConnection {
     }
 
     pub async fn send_relay_server_type_reply(&self) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayServerTypeReply)
             .await;
     }
 
     pub async fn send_packet_to_host(&self, packet: Packet) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToHost(packet))
             .await;
     }
 
     pub async fn send_packet_to_host_raw(&self, packet: Packet) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToHostRaw(packet))
             .await;
     }
 
     pub async fn send_packet_to_others(&self, packet: Packet) {
-        self.shared_channel
+        // TODO: handle the error
+        let _ = self
+            .shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToOthers(packet))
             .await;
