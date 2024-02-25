@@ -6,25 +6,20 @@ mod connection_manager;
 mod core;
 mod data;
 mod packet;
+mod relay_manager;
 mod server;
 mod worker_pool;
-mod relay_manager;
-
 
 lazy_static! {
-    static ref NOW: std::time::Instant = {
-        Instant::now()
-    };
+    static ref NOW: std::time::Instant = Instant::now();
 }
 
 use std::{
-    sync::Arc, time::{Duration, Instant},
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
-use crate::{
-    data::START_INFO,
-    server::config::*,
-};
+use crate::{data::START_INFO, server::config::*};
 
 use connection_manager::ConnectionManager;
 use fern::colors::{Color, ColoredLevelConfig};
@@ -63,7 +58,9 @@ async fn main() {
             info!("加载中.....");
             info!("将从如下配置启动\n{}", res);
 
-            let _ = tokio::spawn(start_server(res.server)).await.expect("start server error");
+            let _ = tokio::spawn(start_server(res.server))
+                .await
+                .expect("start server error");
 
             std::thread::sleep(Duration::from_millis(u64::MAX));
         }
@@ -80,8 +77,8 @@ async fn start_server(server_config: ServerConfig) -> anyhow::Result<Arc<Connect
 
     let shared_relay_mg = SharedRelayManager::new(10).await;
 
-
-    let connection_mg = Arc::new(ConnectionManager::new(server_config,shared_relay_mg.clone()).await);
+    let connection_mg =
+        Arc::new(ConnectionManager::new(server_config, shared_relay_mg.clone()).await);
 
     let listener = TcpListener::bind(&listen_addr).await?;
 
@@ -100,7 +97,6 @@ async fn init_accepter(
         info!("来自{}的新连接", new_connection.1);
 
         connection_mg.new_connection(new_connection).await;
-
     }
 }
 

@@ -127,7 +127,6 @@ impl Packet {
             self.is_prepared = true;
         }
     }
-
 }
 
 pub trait PacketReadWriteExt {
