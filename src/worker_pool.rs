@@ -103,9 +103,11 @@ where
             mpsc::Receiver<D>,
             EWA,
         ) -> Pin<Box<dyn Future<Output = Result<R, anyhow::Error>> + Send + 'static>>
-        + Copy,
+        + Copy
+        + 'static,
     R: Sync + Send + 'static,
-    EWA: Clone,
+    D: 'static,
+    EWA: Clone + 'static,
 {
     let mut handle_vec = Vec::with_capacity(default_worker);
 
