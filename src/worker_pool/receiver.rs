@@ -5,6 +5,7 @@ use std::io::Cursor;
 use std::{sync::Arc, usize};
 
 use crate::connection::shared_connection::SharedConnection;
+
 use crate::core::ServerCommand;
 use crate::packet::{Packet, PacketType};
 use crate::worker_pool::receiver::error::ErrorKind;
@@ -51,37 +52,37 @@ async fn receiver_fn(read_half: &mut OwnedReadHalf) -> anyhow::Result<Packet> {
 
 pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<()> {
     loop {
-        let Some((shared_con, mut read_half, mut command_rx)) = data.recv().await else {
-            continue;
-        };
-
-        loop {
-            tokio::select! {
-                recv = receiver_fn(&mut read_half) => {
-                    match recv {
-                        Ok(packet) => {
-                            println!("PermissionStatus:{:?}ReceiverPacket:{:?}\n",shared_con.shared_data.player_info.permission_status.read(),packet);
-                            shared_con.type_relay(shared_con.clone(), packet).await;
-                            continue;
+        match data.recv().await {
+            Some((shared_con, mut read_half, mut command_rx)) => {
+                loop {
+                    tokio::select! {
+                        recv = receiver_fn(&mut read_half) => {
+                            match recv {
+                                Ok(packet) => {
+                                    //println!("PermissionStatus:{:?}ReceiverPacket:{:?}\n",shared_con.shared_data.player_info.permission_status.read(),packet);
+                                    shared_con.type_relay(shared_con.clone(), packet).await;
+                                    continue;
+                                }
+                                Err(_) => {shared_con.disconnect().await;break;}
+                            };
                         }
-                        Err(_) => {shared_con.disconnect().await;break;}
-                    };
-                }
 
-                command = command_rx.recv() => {
-                    match command {
-                        Ok(command) => {
+                        command = command_rx.recv() => {
                             match command {
-                                ServerCommand::Disconnect => {
-                                    break;
+                                Ok(command) => {
+                                    match command {
+                                        ServerCommand::Disconnect => {
+                                            break;
+                                        },
+                                    }
                                 },
-                                ServerCommand::None => {},
+                                Err(_) => {shared_con.disconnect().await;break;},
                             }
-                        },
-                        Err(_) => {shared_con.disconnect().await;break;},
+                        }
                     }
                 }
             }
+            None => continue,
         }
     }
 }

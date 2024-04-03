@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
-    InvalidInput,
+    InvalidInput
 }
 
 #[derive(Debug)]
@@ -19,7 +19,6 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-#[allow(dead_code)]
 impl Error {
     pub fn new<E>(kind: ErrorKind, err: E) -> Self
     where

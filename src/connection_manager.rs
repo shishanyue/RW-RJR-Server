@@ -2,13 +2,15 @@ mod connection_lib;
 
 use std::{net::SocketAddr, sync::Arc};
 
+use async_channel::Sender;
 use log::info;
 use tokio::{join, net::TcpStream, runtime::Runtime, sync::mpsc, task::JoinHandle};
 
 use crate::connection::ConnectionLibAPI;
+use crate::packet::{self, Packet};
 use crate::relay_manager::SharedRelayManager;
-use crate::worker_pool::receiver::receiver;
 use crate::worker_pool::sender::sender;
+use crate::{worker_pool::receiver::receiver};
 use crate::{
     connection::Connection,
     server::ServerConfig,
@@ -25,9 +27,14 @@ pub struct ConnectionManager {
     new_con_tx: Option<mpsc::Sender<NewConnectionData>>,
     handle_vec: Vec<JoinHandle<()>>,
     runtime: Option<Arc<Runtime>>,
-    // TODO: use it
-    _connection_runtime: Option<Runtime>,
+    connection_runtime: Option<Runtime>,
     shared_relay_mg: Arc<SharedRelayManager>,
+    pub con_lib_api_tx:Option<mpsc::Sender<ConnectionLibAPI>>
+}
+
+pub enum By {
+    Addr(String),
+    Name(String)
 }
 
 impl ConnectionManager {
@@ -55,7 +62,7 @@ impl ConnectionManager {
         };
 
         let receiver_pool = new_worker_pool(
-            30,
+            1,
             move |r_receiver, _| Box::pin(receiver(r_receiver)),
             receiver_block_rt,
             (),
@@ -63,7 +70,7 @@ impl ConnectionManager {
         .await;
 
         let processor_pool = new_worker_pool(
-            30,
+            1,
             move |p_receiver, _| Box::pin(processor(p_receiver)),
             processor_block_rt,
             (),
@@ -71,7 +78,7 @@ impl ConnectionManager {
         .await;
 
         let sender_pool = new_worker_pool(
-            30,
+            1,
             move |s_receiver, _| Box::pin(sender(s_receiver)),
             sender_block_rt,
             (),
@@ -92,6 +99,8 @@ impl ConnectionManager {
         //初始化Connection Lib
         let con_lib_api_tx = self.init_con_lib().await;
 
+        self.con_lib_api_tx = Some(con_lib_api_tx.clone());
+        
         //处理Packet的channel
         //因为processor与receiver和sender的进程不同
         let (processor_sorter_tx, processor_sorter_rx) = mpsc::channel(10);
@@ -125,17 +134,14 @@ impl ConnectionManager {
                     let new_sender = sender_pool.get_free_worker().await;
 
                     tokio::select! {
-                        Some((receiver,sender)) = back_worker_rx.recv() => {
-                            receiver_pool.push_free_worker(receiver).await;
-                            sender_pool.push_free_worker(sender).await;
-                        }
+                        
                         //接受到新连接
                         Some((socket, addr)) = new_con_rx.recv() => {
                             //建立连接并返回SharedConnection
                             let new_shared_con = Connection::new_shared(
                                 &runtime,
-                                new_receiver,
-                                new_sender,
+                                new_receiver.clone(),
+                                new_sender.clone(),
                                 processor_sorter_tx.clone(),
                                 addr,
                                 shared_relay_mg.clone(),
@@ -143,7 +149,8 @@ impl ConnectionManager {
                                 con_lib_api_tx.clone()
                             );
 
-
+                            //receiver_pool.push_free_worker(new_receiver).await;
+                            //sender_pool.push_free_worker(new_sender).await;
                             //绑定socket到receiver和sender上
                             new_shared_con.bind(new_shared_con.clone(), socket).await;
 
@@ -192,14 +199,26 @@ impl ConnectionManager {
                     {
                         ConnectionLibAPI::RemoveConnectionByAddr(addr) => {
                             connection_lib.remove_by_addr(addr)
-                        }
+                        },
                         ConnectionLibAPI::InsertConnection(shared_con) => {
                             connection_lib.insert(shared_con)
                         }
+                        ConnectionLibAPI::SendPacketToPlayerByUUID() => todo!(),
+                        ConnectionLibAPI::SendPacketToPlayerByName(name, packet) => todo!(),
+                        ConnectionLibAPI::SendPacketToPlayerByAddr(addr, packet) => {
+                            connection_lib.send_packet_to_player_by_addr(addr, packet).await
+                        },
                     }
                 }
             }));
         con_lib_api_tx
+    }
+
+    pub async fn send_packet_to_player_by(&self,by:By,packet:Packet){
+        match by {
+            By::Addr(addr) => self.con_lib_api_tx.as_ref().unwrap().send(ConnectionLibAPI::SendPacketToPlayerByAddr(addr,packet)).await.expect(""),
+            By::Name(_) => todo!(),
+        }
     }
 
     async fn ne_new(
@@ -213,7 +232,7 @@ impl ConnectionManager {
                     .await
                     .expect("connection manager runtime create error!"),
             )),
-            _connection_runtime: Some(
+            connection_runtime: Some(
                 creat_block_runtime(con_thread_number)
                     .await
                     .expect("connection runtime create error!"),
@@ -221,6 +240,7 @@ impl ConnectionManager {
             new_con_tx: None,
             handle_vec: Vec::new(),
             shared_relay_mg,
+            con_lib_api_tx:None
         }
     }
 

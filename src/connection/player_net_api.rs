@@ -1,3 +1,9 @@
+
+
+
+
+
+
 #[derive(Debug)]
 pub struct RelayDirectInspection {
     pub client_version: u32,
@@ -25,7 +31,7 @@ impl CustomRelayData {
             mods,
             uplist,
             version,
-            beta_game_version,
+            beta_game_version
         }
     }
 }

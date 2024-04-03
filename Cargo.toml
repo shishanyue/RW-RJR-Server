@@ -25,6 +25,9 @@ dashmap = "5.5.3"
 async-channel = "2.2.0"
 lazy_static = "1.4.0"
 
+image = "0.25.1"
+bracket-color = "0.8.7"
+
 [dependencies.uuid]
 version = "1.7.0"
 features = [

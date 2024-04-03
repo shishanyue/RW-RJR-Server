@@ -11,12 +11,11 @@ use std::{
     },
 };
 
-use tokio::{runtime::Runtime, sync::mpsc, task::JoinHandle};
-
-pub type WorkerChannelPair<D> = (
-    mpsc::Sender<mpsc::Sender<D>>,
-    mpsc::Receiver<mpsc::Sender<D>>,
-);
+use tokio::{
+    runtime::Runtime,
+    sync::{mpsc},
+    task::JoinHandle,
+};
 
 pub struct WorkerPool<D, R, F, EWA>
 where
@@ -31,7 +30,7 @@ where
 {
     worker_handle: Vec<JoinHandle<anyhow::Result<R>>>,
     pub free_worker: Vec<mpsc::Sender<D>>,
-    pub back_worker_channel: Option<WorkerChannelPair<D>>,
+    pub back_worker_channel:Option<(mpsc::Sender<mpsc::Sender<D>>,mpsc::Receiver<mpsc::Sender<D>>)>,
     worker_fn: F,
     runtime: Runtime,
     extra_worker_arg: EWA,
@@ -47,8 +46,7 @@ where
         ) -> Pin<Box<dyn Future<Output = Result<R, anyhow::Error>> + Send + 'static>>
         + Copy,
     R: Sync + Send + 'static,
-    EWA: Clone,
-{
+    EWA: Clone, {
     pub async fn get_free_worker(&mut self) -> mpsc::Sender<D> {
         match self.free_worker.pop() {
             Some(receiver) => receiver,
@@ -120,7 +118,7 @@ where
     WorkerPool::<D, R, F, EWA> {
         worker_handle: handle_vec,
         free_worker: worker_sender_vec,
-        back_worker_channel: Some(mpsc::channel(10)),
+        back_worker_channel:Some(mpsc::channel(10)),
         worker_fn,
         runtime,
         extra_worker_arg: extra_worker_arg.clone(),

@@ -1,19 +1,27 @@
+
+
+
+
+
 use tokio::{
     runtime::{Builder, Runtime},
-    sync::mpsc,
+    sync::{
+        mpsc::{self},
+    },
 };
 
-use crate::worker_pool::{receiver::ReceiverData, sender::SenderData};
+use crate::{
+    worker_pool::{
+        receiver::{ReceiverData},
+        sender::{SenderData},
+    },
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ServerCommand {
-    Disconnect,
-    #[allow(dead_code)]
-    None,
+    Disconnect
 }
 
-// TODO: use it
-pub type _WorkersSender = (mpsc::Sender<ReceiverData>, mpsc::Sender<SenderData>);
 
 pub async fn creat_block_runtime(threads: usize) -> anyhow::Result<Runtime> {
     Ok(Builder::new_multi_thread()
@@ -23,3 +31,4 @@ pub async fn creat_block_runtime(threads: usize) -> anyhow::Result<Runtime> {
         .build()
         .unwrap())
 }
+

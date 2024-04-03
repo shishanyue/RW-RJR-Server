@@ -1,8 +1,9 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, Weak},
+    sync::{Arc, RwLock, Weak},
 };
 
+use log::info;
 use tokio::{
     net::TcpStream,
     runtime::Runtime,
@@ -10,7 +11,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::packet::Packet;
+use crate::packet::{self, Packet};
 
 use super::{
     player_net_api::RelayDirectInspection, Connection, ConnectionAPI, ConnectionChannel,
@@ -131,45 +132,35 @@ impl SharedConnection {
     }
 
     pub async fn type_relay(&self, shared_self: Arc<SharedConnection>, packet: Packet) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .processor_sorter_tx
             .send((shared_self, packet))
             .await;
     }
 
     pub async fn set_packet(&self, packet: Packet) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetPacket(packet))
             .await;
     }
 
     pub async fn set_cache_packet(&self, cache_packet: Packet) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetCachePacket(cache_packet))
             .await;
     }
 
     pub async fn send_relay_server_info(&self) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayServerInfo)
             .await;
     }
 
     pub async fn get_ping_data(&self) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::GetPingData)
             .await;
@@ -184,36 +175,28 @@ impl SharedConnection {
     }
 
     pub async fn send_relay_hall_message(&self, msg: &str) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayHallMessage(msg.to_string()))
             .await;
     }
 
     pub async fn set_room_index(&self, index: u32) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetRoomIndex(Some(index)))
             .await;
     }
 
     pub async fn add_relay_connect(&self) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::AddRelayConnect)
             .await;
     }
 
     pub async fn disconnect(&self) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::Disconnect)
             .await;
@@ -221,10 +204,7 @@ impl SharedConnection {
 
     pub async fn relay_direct_inspection(&self) -> Option<RelayDirectInspection> {
         let (inspection_data_tx, inspection_data_rx) = oneshot::channel();
-
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::RelayDirectInspection(inspection_data_tx))
             .await;
@@ -235,36 +215,28 @@ impl SharedConnection {
     }
 
     pub async fn send_relay_server_type_reply(&self) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayServerTypeReply)
             .await;
     }
 
     pub async fn send_packet_to_host(&self, packet: Packet) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToHost(packet))
             .await;
     }
 
     pub async fn send_packet_to_host_raw(&self, packet: Packet) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToHostRaw(packet))
             .await;
     }
 
     pub async fn send_packet_to_others(&self, packet: Packet) {
-        // TODO: handle the error
-        let _ = self
-            .shared_channel
+        self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToOthers(packet))
             .await;
@@ -273,6 +245,16 @@ impl SharedConnection {
 
 impl Drop for SharedConnection {
     fn drop(&mut self) {
-        self.handle.abort();
+        if !self.shared_channel.receiver.is_closed() && !self.shared_channel.sender.is_closed() {
+            info!(
+                "{}断开连接",
+                self.shared_data
+                    .connection_info
+                    .addr
+                    .upgrade()
+                    .expect("drop shared_con get addr error")
+            );
+            self.handle.abort();
+        }
     }
 }

@@ -1,3 +1,5 @@
+pub mod super_packet;
+
 use std::io::Cursor;
 
 use num_enum::TryFromPrimitive;
@@ -75,6 +77,7 @@ pub enum PacketType {
     PACKET_RECONNECT_TO = 178,
 
     EMPTYP_ACKAGE = 0,
+
     #[default]
     NOT_RESOLVED = u32::MAX,
 }
@@ -85,7 +88,10 @@ pub struct Packet {
     pub packet_length: u32,
     pub packet_buffer: Cursor<Vec<u8>>,
     pub is_prepared: bool,
+    
 }
+
+
 
 impl Packet {
     pub async fn new(packet_type: PacketType) -> Self {
@@ -111,7 +117,6 @@ impl Packet {
             is_prepared: true,
         }
     }
-
     pub async fn prepare(&mut self) {
         if !self.is_prepared {
             let packet_type = self.packet_type as u32;
@@ -127,6 +132,7 @@ impl Packet {
             self.is_prepared = true;
         }
     }
+
 }
 
 pub trait PacketReadWriteExt {
@@ -146,6 +152,7 @@ impl PacketReadWriteExt for Packet {
     }
     async fn read_if_is_string(&mut self) -> Option<String> {
         if self.packet_buffer.read_u8().await.unwrap() == 1 {
+            
             self.read_string().await
         } else {
             None
