@@ -65,7 +65,7 @@ async fn main() {
                 .await
                 .expect("start server error")
                 .expect("start server error");
-
+std::thread::sleep(Duration::from_millis(u64::MAX));
             let std_in = std::io::stdin();
             let mut admin_command = String::new();
             loop {
