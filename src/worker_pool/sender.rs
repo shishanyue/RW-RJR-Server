@@ -39,6 +39,7 @@ pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> 
                                     Ok(_) => {
                                     },
                                     Err(_) => {shared_con.disconnect().await;break;},
+                                    }
                                     },
                                 Err(_) => {shared_con.disconnect().await;break;},
                             }
