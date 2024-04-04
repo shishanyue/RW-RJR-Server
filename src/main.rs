@@ -17,11 +17,15 @@ lazy_static! {
 }
 
 use std::{
-    net::SocketAddr, path::Path, sync::Arc, time::{Duration, Instant}
+    net::SocketAddr,
+    path::Path,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use crate::{
-    connection_manager::By, data::START_INFO, packet::super_packet::SuperPacket, rw_engine::image::get_image_packet, server::config::*
+    connection_manager::By, data::START_INFO, packet::super_packet::SuperPacket,
+    rw_engine::image::get_image_packet, server::config::*,
 };
 
 use connection_manager::ConnectionManager;
@@ -65,7 +69,7 @@ async fn main() {
                 .await
                 .expect("start server error")
                 .expect("start server error");
-std::thread::sleep(Duration::from_millis(u64::MAX));
+            std::thread::sleep(Duration::from_millis(u64::MAX));
             let std_in = std::io::stdin();
             let mut admin_command = String::new();
             loop {
@@ -74,7 +78,7 @@ std::thread::sleep(Duration::from_millis(u64::MAX));
 
                 for y in 1..200 {
                     let packet =
-                        SuperPacket::set_terrain(y as f32 * 20. + 500., y as f32 * 20. + 500.,"1")
+                        SuperPacket::set_terrain(y as f32 * 20. + 500., y as f32 * 20. + 500., "1")
                             .await;
 
                     shared_connection_mg
@@ -83,15 +87,12 @@ std::thread::sleep(Duration::from_millis(u64::MAX));
                 }
 
                 for y in 1..500 {
-                    let packet =
-                        SuperPacket::set_terrain(500., y as f32 * 20. + 500.,"1")
-                            .await;
+                    let packet = SuperPacket::set_terrain(500., y as f32 * 20. + 500., "1").await;
 
                     shared_connection_mg
                         .send_packet_to_player_by(By::Addr(admin_command.clone()), packet)
                         .await;
                 }
-            
 
                 /*
                 let packets = get_image_packet(Path::new("1.png")).await.unwrap();

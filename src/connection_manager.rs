@@ -8,7 +8,7 @@ use tokio::{join, net::TcpStream, runtime::Runtime, sync::mpsc, task::JoinHandle
 use crate::connection::ConnectionLibAPI;
 use crate::packet::Packet;
 use crate::relay_manager::SharedRelayManager;
-use crate::worker_pool::{sender::sender,receiver::receiver};
+use crate::worker_pool::{receiver::receiver, sender::sender};
 use crate::{
     connection::Connection,
     server::ServerConfig,
@@ -27,12 +27,12 @@ pub struct ConnectionManager {
     runtime: Option<Arc<Runtime>>,
     connection_runtime: Option<Runtime>,
     shared_relay_mg: Arc<SharedRelayManager>,
-    pub con_lib_api_tx:Option<mpsc::Sender<ConnectionLibAPI>>
+    pub con_lib_api_tx: Option<mpsc::Sender<ConnectionLibAPI>>,
 }
 
 pub enum By {
     Addr(String),
-    Name(String)
+    Name(String),
 }
 
 impl ConnectionManager {
@@ -98,7 +98,7 @@ impl ConnectionManager {
         let con_lib_api_tx = self.init_con_lib().await;
 
         self.con_lib_api_tx = Some(con_lib_api_tx.clone());
-        
+
         //处理Packet的channel
         //因为processor与receiver和sender的进程不同
         let (processor_sorter_tx, processor_sorter_rx) = mpsc::channel(10);
@@ -197,24 +197,32 @@ impl ConnectionManager {
                     {
                         ConnectionLibAPI::RemoveConnectionByAddr(addr) => {
                             connection_lib.remove_by_addr(addr)
-                        },
+                        }
                         ConnectionLibAPI::InsertConnection(shared_con) => {
                             connection_lib.insert(shared_con)
                         }
                         ConnectionLibAPI::SendPacketToPlayerByUUID() => todo!(),
                         ConnectionLibAPI::SendPacketToPlayerByName(name, packet) => todo!(),
                         ConnectionLibAPI::SendPacketToPlayerByAddr(addr, packet) => {
-                            connection_lib.send_packet_to_player_by_addr(addr, packet).await
-                        },
+                            connection_lib
+                                .send_packet_to_player_by_addr(addr, packet)
+                                .await
+                        }
                     }
                 }
             }));
         con_lib_api_tx
     }
 
-    pub async fn send_packet_to_player_by(&self,by:By,packet:Packet){
+    pub async fn send_packet_to_player_by(&self, by: By, packet: Packet) {
         match by {
-            By::Addr(addr) => self.con_lib_api_tx.as_ref().unwrap().send(ConnectionLibAPI::SendPacketToPlayerByAddr(addr,packet)).await.expect(""),
+            By::Addr(addr) => self
+                .con_lib_api_tx
+                .as_ref()
+                .unwrap()
+                .send(ConnectionLibAPI::SendPacketToPlayerByAddr(addr, packet))
+                .await
+                .expect(""),
             By::Name(_) => todo!(),
         }
     }
@@ -238,7 +246,7 @@ impl ConnectionManager {
             new_con_tx: None,
             handle_vec: Vec::new(),
             shared_relay_mg,
-            con_lib_api_tx:None
+            con_lib_api_tx: None,
         }
     }
 

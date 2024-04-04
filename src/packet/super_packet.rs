@@ -45,7 +45,7 @@ static SET_TERRAIN_PACKET_2: [u8; 8] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 pub struct SuperPacket;
 
 impl SuperPacket {
-    pub async fn set_terrain(x: f32, y: f32,terrain_name:&str) -> Packet {
+    pub async fn set_terrain(x: f32, y: f32, terrain_name: &str) -> Packet {
         let mut packet = Packet::new(PacketType::GAMECOMMAND_RECEIVE).await;
 
         packet
@@ -63,7 +63,10 @@ impl SuperPacket {
             .await
             .expect("error");
 
-        packet.write_string(&format!("SetTerrainType{}",terrain_name)).await.expect("error");
+        packet
+            .write_string(&format!("SetTerrainType{}", terrain_name))
+            .await
+            .expect("error");
         packet.packet_buffer.write_u32(0).await.unwrap();
         packet.packet_buffer.write_u32(0).await.unwrap();
         packet.packet_buffer.write_u8(0).await.unwrap();

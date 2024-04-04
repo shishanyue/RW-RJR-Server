@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
-    InvalidInput
+    InvalidInput,
 }
 
 #[derive(Debug)]

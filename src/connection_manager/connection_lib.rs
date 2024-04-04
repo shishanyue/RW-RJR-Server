@@ -1,12 +1,10 @@
-use std::{collections::{hash_map::Iter, HashMap}, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{hash_map::Iter, HashMap},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use crate::{connection::shared_connection::SharedConnection, packet::Packet};
-
-
-
-
-
-
 
 pub struct ConnectionLib {
     addr_map: HashMap<Arc<SocketAddr>, Arc<SharedConnection>>, //main key
@@ -22,12 +20,15 @@ impl ConnectionLib {
     }
 
     pub fn insert(&mut self, shared_con: Arc<SharedConnection>) {
-        println!("addr:{}",shared_con
-        .shared_data
-        .connection_info
-        .addr
-        .upgrade()
-        .unwrap());
+        println!(
+            "addr:{}",
+            shared_con
+                .shared_data
+                .connection_info
+                .addr
+                .upgrade()
+                .unwrap()
+        );
 
         self.addr_map.insert(
             shared_con
@@ -40,19 +41,19 @@ impl ConnectionLib {
         );
     }
 
-    pub fn get_iter(&self) -> Iter<'_,Arc<SocketAddr>, Arc<SharedConnection>>{
+    pub fn get_iter(&self) -> Iter<'_, Arc<SocketAddr>, Arc<SharedConnection>> {
         self.addr_map.iter()
     }
 
-    pub fn send_packet_to_player_by_name(&self,name:String,packet:Packet){
+    pub fn send_packet_to_player_by_name(&self, name: String, packet: Packet) {
         todo!()
     }
 
-    pub async fn send_packet_to_player_by_addr(&self,addr: String,packet:Packet){
-        for (con_addr,con) in self.addr_map.iter(){
-            println!("{}",&con_addr.to_string());
-            if con_addr.to_string() == addr{
-                println!("superPacket:{:?}",packet);
+    pub async fn send_packet_to_player_by_addr(&self, addr: String, packet: Packet) {
+        for (con_addr, con) in self.addr_map.iter() {
+            println!("{}", &con_addr.to_string());
+            if con_addr.to_string() == addr {
+                println!("superPacket:{:?}", packet);
                 con.send_packet(packet.clone()).await
             }
         }

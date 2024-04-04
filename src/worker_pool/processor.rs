@@ -17,25 +17,27 @@ pub async fn processor(mut data: mpsc::Receiver<ProcesseorData>) -> anyhow::Resu
                 let player_info_arc = shared_con.shared_data.player_info.clone();
                 let connection_info_arc = shared_con.shared_data.connection_info.clone();
                 let permission = *player_info_arc.permission_status.read().unwrap();
-                
+
                 shared_con.set_packet(packet.clone()).await;
-        
+
                 match permission {
                     PermissionStatus::InitialConnection => match packet_type {
                         PacketType::PREREGISTER_INFO_RECEIVE => {
                             shared_con.send_relay_server_info().await;
-        
+
                             *player_info_arc.permission_status.write().unwrap() =
                                 PermissionStatus::Certified;
-        
+
                             shared_con.set_cache_packet(packet).await;
-        
+
                             let inspection_data = shared_con.relay_direct_inspection().await;
-        
+
                             if let Some(data) = inspection_data {
-                                if let (Some(name), None) = (data.player_name.clone(), data.query_string) {
+                                if let (Some(name), None) =
+                                    (data.player_name.clone(), data.query_string)
+                                {
                                     *player_info_arc.player_name.write().unwrap() = name;
-        
+
                                     connection_info_arc
                                         .client_version
                                         .store(data.client_version, Ordering::Relaxed);
@@ -57,7 +59,9 @@ pub async fn processor(mut data: mpsc::Receiver<ProcesseorData>) -> anyhow::Resu
                         _ => {}
                     },
                     PermissionStatus::Certified => match packet_type {
-                        PacketType::RELAY_118_117_RETURN => shared_con.send_relay_server_type_reply().await,
+                        PacketType::RELAY_118_117_RETURN => {
+                            shared_con.send_relay_server_type_reply().await
+                        }
                         PacketType::HEART_BEAT => {}
                         PacketType::DISCONNECT => shared_con.disconnect().await,
                         _ => {}
@@ -90,9 +94,8 @@ pub async fn processor(mut data: mpsc::Receiver<ProcesseorData>) -> anyhow::Resu
                         },
                         _ => shared_con.send_packet_to_host(packet).await,
                     },
-        
+
                     PermissionStatus::HostPermission => match packet_type {
-                        
                         PacketType::HEART_BEAT => shared_con.get_ping_data().await,
                         PacketType::PACKET_FORWARD_CLIENT_TO => {
                             shared_con.send_packet_to_others(packet).await;
@@ -101,10 +104,8 @@ pub async fn processor(mut data: mpsc::Receiver<ProcesseorData>) -> anyhow::Resu
                         _ => {}
                     },
                 };
-            },
+            }
             None => continue,
         }
-
-
     }
 }

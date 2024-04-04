@@ -6,7 +6,11 @@ use tokio::{
     sync::{broadcast, mpsc},
 };
 
-use crate::{connection::{shared_connection::SharedConnection, WorkersSender}, core::ServerCommand, packet::Packet};
+use crate::{
+    connection::{shared_connection::SharedConnection, WorkersSender},
+    core::ServerCommand,
+    packet::Packet,
+};
 
 pub type SenderData = (
     Arc<SharedConnection>,

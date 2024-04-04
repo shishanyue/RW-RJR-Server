@@ -5,7 +5,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-
 use rand::{Rng, SeedableRng};
 use tokio::{
     runtime::Runtime,
@@ -63,8 +62,7 @@ impl SharedRelayManager {
                     .expect("recv relay mg api error")
                 {
                     RelayManagerAPI::GetRelay(id, relay_index_tx) => {
-                        let id = format!("S{}",id);
-
+                        let id = format!("S{}", id);
 
                         let mut shared_relay = None;
                         for (relay_id, shared) in relay_mg.room_map.iter() {
@@ -125,11 +123,10 @@ impl SharedRelayManager {
                     .gen_range(100..9999)
                     .to_string();
                 if (self.get_relay(&tmp_id).await).is_none() {
-                    break format!("S{}",tmp_id);
+                    break format!("S{}", tmp_id);
                 }
             }
         };
-
 
         let shared_relay_room =
             SharedRelayRoom::new_shared(&self.relay_rt, Arc::downgrade(&admin), id, custom).await;
