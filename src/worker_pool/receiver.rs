@@ -41,7 +41,7 @@ async fn receiver_fn(read_half: &mut OwnedReadHalf) -> anyhow::Result<Packet> {
     }
 
     let mut packet_buffer = vec![0; packet_length as usize];
-    read_half.read_exact(&mut packet_buffer).await.unwrap();
+    read_half.read_exact(&mut packet_buffer).await?;
 
     Ok(Packet::decode_from_buffer(
         packet_length as u32,
