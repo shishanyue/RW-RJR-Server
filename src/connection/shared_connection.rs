@@ -1,6 +1,6 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, RwLock, Weak},
+    sync::{Arc, Weak},
 };
 
 use log::info;
@@ -11,7 +11,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::packet::{self, Packet};
+use crate::packet::Packet;
 
 use super::{
     player_net_api::RelayDirectInspection, Connection, ConnectionAPI, ConnectionChannel,

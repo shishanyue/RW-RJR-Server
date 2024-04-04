@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use log::{info, warn};
+use log::warn;
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     runtime::Runtime,
@@ -20,7 +20,10 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::{
-    core::ServerCommand, packet::{Packet, PacketReadWriteExt, PacketType}, relay_manager::{relay::SharedRelayRoom, SharedRelayManager}, worker_pool::{processor::ProcesseorData, receiver::ReceiverData, sender::SenderData}
+    core::ServerCommand,
+    packet::{Packet, PacketReadWriteExt, PacketType},
+    relay_manager::{relay::SharedRelayRoom, SharedRelayManager},
+    worker_pool::{processor::ProcesseorData, receiver::ReceiverData, sender::SenderData},
 };
 
 use self::{
@@ -44,7 +47,6 @@ pub struct ConnectionInfo {
     pub is_beta_version: Arc<AtomicBool>,
 }
 
-
 #[derive(Debug)]
 pub struct ConnectionChannel {
     pub receiver: mpsc::Sender<ReceiverData>,
@@ -53,7 +55,7 @@ pub struct ConnectionChannel {
     pub con_api_tx: mpsc::Sender<ConnectionAPI>,
     pub packet_tx: async_channel::Sender<Packet>,
     pub packet_rx: async_channel::Receiver<Packet>,
-    
+
     pub command_tx: broadcast::Sender<ServerCommand>,
     pub command_rx: broadcast::Receiver<ServerCommand>,
 }
@@ -88,7 +90,7 @@ pub struct Connection {
     pub shared_relay_room: Option<Arc<SharedRelayRoom>>,
     pub is_disconnected: Semaphore,
     back_worker_tx: mpsc::Sender<WorkersSender>,
-    con_lib_api_tx: mpsc::Sender<ConnectionLibAPI>
+    con_lib_api_tx: mpsc::Sender<ConnectionLibAPI>,
 }
 
 #[derive(Debug)]
@@ -96,8 +98,8 @@ pub enum ConnectionLibAPI {
     InsertConnection(Arc<SharedConnection>),
     RemoveConnectionByAddr(SocketAddr),
     SendPacketToPlayerByUUID(),
-    SendPacketToPlayerByName(String,Packet),
-    SendPacketToPlayerByAddr(String,Packet)
+    SendPacketToPlayerByName(String, Packet),
+    SendPacketToPlayerByAddr(String, Packet),
 }
 
 impl ConnectionChannel {
@@ -118,7 +120,7 @@ impl ConnectionChannel {
             packet_rx,
             packet_tx,
             command_rx,
-            command_tx
+            command_tx,
         }
     }
 }
@@ -132,7 +134,7 @@ impl Connection {
         addr: SocketAddr,
         shared_relay_mg: Arc<SharedRelayManager>,
         back_worker_tx: mpsc::Sender<WorkersSender>,
-        con_lib_api_tx: mpsc::Sender<ConnectionLibAPI>
+        con_lib_api_tx: mpsc::Sender<ConnectionLibAPI>,
     ) -> Arc<SharedConnection> {
         let (con_api_tx, con_api_rx) = mpsc::channel(10);
 
@@ -144,9 +146,9 @@ impl Connection {
             shared_relay_mg,
             room_index: None,
             shared_relay_room: None,
-            is_disconnected:Semaphore::new(1),
+            is_disconnected: Semaphore::new(1),
             back_worker_tx,
-            con_lib_api_tx
+            con_lib_api_tx,
         };
 
         let shared_channel = Arc::new(ConnectionChannel::new(
@@ -172,7 +174,7 @@ impl Connection {
         self.shared_con.as_ref().unwrap().send_packet(packet).await;
     }
 
-    pub async fn send_packet_to_others(&self,mut packet: Packet) {
+    pub async fn send_packet_to_others(&self, mut packet: Packet) {
         let index = packet.packet_buffer.read_u32().await.unwrap();
         let packet_type = packet.packet_buffer.read_u32().await.unwrap();
 
@@ -197,7 +199,7 @@ impl Connection {
         self.shared_relay_room
             .as_ref()
             .expect("room is None")
-            .send_packet_to_others(index,send_packet)
+            .send_packet_to_others(index, send_packet)
             .await;
     }
 
@@ -328,7 +330,6 @@ impl Connection {
     }
 
     pub async fn add_relay_connect(&mut self) {
-
         let shared_data = self.shared_con.as_ref().unwrap().shared_data.as_ref();
 
         *shared_data
@@ -367,8 +368,16 @@ impl Connection {
             todo!()
         }
 
-        self.shared_con.as_ref().unwrap().send_packet_to_host_raw(packet).await;
-        self.shared_con.as_ref().unwrap().send_packet_to_host(self.cache_packet.clone().expect("cache packet error")).await;
+        self.shared_con
+            .as_ref()
+            .unwrap()
+            .send_packet_to_host_raw(packet)
+            .await;
+        self.shared_con
+            .as_ref()
+            .unwrap()
+            .send_packet_to_host(self.cache_packet.clone().expect("cache packet error"))
+            .await;
 
         self.chat_message_packet_internal("RJR Server:", "欢迎", 5)
             .await;
@@ -507,24 +516,34 @@ impl Connection {
 
                     let shared_channel = self.shared_con.as_ref().unwrap().shared_channel.as_ref();
                     //println!("is_disconnected");
-                    
+
                     self.back_worker_tx
-                        .send((shared_channel.receiver.clone(), shared_channel.sender.clone()))
+                        .send((
+                            shared_channel.receiver.clone(),
+                            shared_channel.sender.clone(),
+                        ))
                         .await
                         .unwrap();
 
-                    shared_channel.command_tx.send(ServerCommand::Disconnect).unwrap();
+                    shared_channel
+                        .command_tx
+                        .send(ServerCommand::Disconnect)
+                        .unwrap();
 
-                    self.con_lib_api_tx.send(ConnectionLibAPI::RemoveConnectionByAddr(*self.addr.clone())).await.expect("remove con error");
+                    self.con_lib_api_tx
+                        .send(ConnectionLibAPI::RemoveConnectionByAddr(*self.addr.clone()))
+                        .await
+                        .expect("remove con error");
 
-                    self.shared_con.take().expect("remove shared_con error when disconnect");
+                    self.shared_con
+                        .take()
+                        .expect("remove shared_con error when disconnect");
                 }
             }
             Err(e) => {
                 warn!("{}", e);
-                panic!("{}",e)
+                panic!("{}", e)
             }
         };
     }
-
 }
