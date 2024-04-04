@@ -32,10 +32,14 @@ pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> 
 
                                     packet.prepare().await;
                                     //println!("PermissionStatus:{:?}SendPacket:{:?}\n",shared_con.shared_data.player_info.permission_status.read(),packet);
-                                    write_half
+                                    
+                                    match write_half
                                     .write_all(&packet.packet_buffer.into_inner())
-                                    .await
-                                    .unwrap()},
+                                    .await {
+                                    Ok(_) => {
+                                    },
+                                    Err(_) => {shared_con.disconnect().await;break;},
+                                    },
                                 Err(_) => {shared_con.disconnect().await;break;},
                             }
                         }
