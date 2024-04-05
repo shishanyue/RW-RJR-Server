@@ -154,6 +154,10 @@ impl ConnectionManager {
 
                             //将新连接存储到Lib里
                             con_lib_api_tx.send(ConnectionLibAPI::InsertConnection(new_shared_con)).await.unwrap();
+                        },
+                        Some((receiver,sender)) = back_worker_rx.recv() => {
+                            receiver_pool.push_free_worker(receiver).await;
+                            sender_pool.push_free_worker(sender).await;
                         }
                     }
                 }
