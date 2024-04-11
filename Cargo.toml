@@ -24,12 +24,14 @@ num-bigint = "0.4.4"
 dashmap = "5.5.3"
 async-channel = "2.2.0"
 lazy_static = "1.4.0"
-
+chrono = "0.4.37"
+reqwest = "0.12.3"
 image = "0.25.1"
 bracket-color = "0.8.7"
+md5 = "0.7.0"
 
 [dependencies.uuid]
-version = "1.7.0"
+version = "1.8.0"
 features = [
     "v4",                # Lets you generate random UUIDs
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
@@ -40,3 +42,4 @@ features = [
 [profile.release]
 opt-level = 3             # 使用稍高一些的优化级别，最低是0，最高是3
 overflow-checks = false     # 关闭整数溢出检查
+lto = true

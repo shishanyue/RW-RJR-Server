@@ -3,9 +3,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use log::info;
 use tokio::{
-    net::TcpStream,
     runtime::Runtime,
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -58,36 +56,40 @@ impl SharedConnection {
             let mut con: Connection = con_rx.recv().expect("con recv error");
             let mut con_api_rx = con_api_rx;
             loop {
-                match con_api_rx.recv().await.expect("Connection API recv error") {
-                    ConnectionAPI::Disconnect => con.disconnect().await,
-                    ConnectionAPI::SetPacket(packet) => con.packet = Some(packet),
-                    ConnectionAPI::SetCachePacket(packet) => con.cache_packet = Some(packet),
-                    ConnectionAPI::SendRelayHallMessage(msg) => {
-                        con.send_relay_hall_message(&msg).await
-                    }
-                    ConnectionAPI::SendRelayServerInfo => con.send_relay_server_info().await,
-                    ConnectionAPI::RelayDirectInspection(inspection_data_tx) => inspection_data_tx
-                        .send(con.relay_direct_inspection().await)
-                        .expect("send inspection_data error"),
+                if let Some(api_type) = con_api_rx.recv().await {
+                    match api_type {
+                        ConnectionAPI::Disconnect => con.disconnect().await,
+                        ConnectionAPI::SetPacket(packet) => con.packet = Some(packet),
+                        ConnectionAPI::SetCachePacket(packet) => con.cache_packet = Some(packet),
+                        ConnectionAPI::SendRelayHallMessage(msg) => {
+                            con.send_relay_hall_message(&msg).await
+                        }
+                        ConnectionAPI::SendRelayServerInfo => con.send_relay_server_info().await,
+                        ConnectionAPI::RelayDirectInspection(inspection_data_tx) => {
+                            inspection_data_tx
+                                .send(con.relay_direct_inspection().await)
+                                .expect("send inspection_data error")
+                        }
 
-                    ConnectionAPI::SendRelayServerTypeReply => {
-                        con.send_relay_server_type_reply().await
-                    }
-                    ConnectionAPI::SetRoomIndex(index) => con.room_index = index,
-                    ConnectionAPI::GetPingData => con.get_ping_data().await,
-                    ConnectionAPI::AddRelayConnect => con.add_relay_connect().await,
-                    ConnectionAPI::SendPacketToOthers(packet) => {
-                        con.send_packet_to_others(packet).await
-                    }
-                    ConnectionAPI::SendPacketToHost(packet) => {
-                        con.send_packet_to_host(packet).await
-                    }
-                    ConnectionAPI::SendPacketToHostRaw(packet) => {
-                        con.shared_relay_room
-                            .as_ref()
-                            .expect("room is None")
-                            .send_packet_to_host(packet)
-                            .await
+                        ConnectionAPI::SendRelayServerTypeReply => {
+                            con.send_relay_server_type_reply().await
+                        }
+                        ConnectionAPI::SetRoomIndex(index) => con.room_index = index,
+                        ConnectionAPI::GetPingData => con.get_ping_data().await,
+                        ConnectionAPI::AddRelayConnect => con.add_relay_connect().await,
+                        ConnectionAPI::SendPacketToOthers(packet) => {
+                            con.send_packet_to_others(packet).await
+                        }
+                        ConnectionAPI::SendPacketToHost(packet) => {
+                            con.send_packet_to_host(packet).await
+                        }
+                        ConnectionAPI::SendPacketToHostRaw(packet) => {
+                            con.shared_relay_room
+                                .as_ref()
+                                .expect("room is None")
+                                .send_packet_to_host(packet)
+                                .await
+                        }
                     }
                 }
             }
@@ -106,64 +108,44 @@ impl SharedConnection {
         shared_con
     }
 
-    pub async fn bind(&self, shared_self: Arc<SharedConnection>, socket: TcpStream) {
-        let (read_half, write_half) = socket.into_split();
-
-        self.shared_channel
-            .receiver
-            .send((
-                shared_self.clone(),
-                read_half,
-                self.shared_channel.command_rx.resubscribe(),
-            ))
-            .await
-            .expect("bind receiver error");
-
-        self.shared_channel
-            .sender
-            .send((
-                shared_self,
-                self.shared_channel.packet_rx.clone(),
-                write_half,
-                self.shared_channel.command_rx.resubscribe(),
-            ))
-            .await
-            .expect("bind sender error");
-    }
-
     pub async fn type_relay(&self, shared_self: Arc<SharedConnection>, packet: Packet) {
         self.shared_channel
             .processor_sorter_tx
             .send((shared_self, packet))
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn set_packet(&self, packet: Packet) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetPacket(packet))
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn set_cache_packet(&self, cache_packet: Packet) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetCachePacket(cache_packet))
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn send_relay_server_info(&self) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayServerInfo)
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn get_ping_data(&self) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::GetPingData)
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn send_packet(&self, packet: Packet) {
@@ -178,28 +160,32 @@ impl SharedConnection {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayHallMessage(msg.to_string()))
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn set_room_index(&self, index: u32) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SetRoomIndex(Some(index)))
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn add_relay_connect(&self) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::AddRelayConnect)
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn disconnect(&self) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::Disconnect)
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn relay_direct_inspection(&self) -> Option<RelayDirectInspection> {
@@ -207,7 +193,8 @@ impl SharedConnection {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::RelayDirectInspection(inspection_data_tx))
-            .await;
+            .await
+            .unwrap();
 
         inspection_data_rx
             .await
@@ -218,43 +205,38 @@ impl SharedConnection {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendRelayServerTypeReply)
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn send_packet_to_host(&self, packet: Packet) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToHost(packet))
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn send_packet_to_host_raw(&self, packet: Packet) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToHostRaw(packet))
-            .await;
+            .await
+            .unwrap()
     }
 
     pub async fn send_packet_to_others(&self, packet: Packet) {
         self.shared_channel
             .con_api_tx
             .send(ConnectionAPI::SendPacketToOthers(packet))
-            .await;
+            .await
+            .unwrap()
     }
 }
 
+
 impl Drop for SharedConnection {
     fn drop(&mut self) {
-        if !self.shared_channel.receiver.is_closed() && !self.shared_channel.sender.is_closed() {
-            info!(
-                "{}断开连接",
-                self.shared_data
-                    .connection_info
-                    .addr
-                    .upgrade()
-                    .expect("drop shared_con get addr error")
-            );
-            self.handle.abort();
-        }
+        self.handle.abort();
     }
 }

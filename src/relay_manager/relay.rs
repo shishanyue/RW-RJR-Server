@@ -115,25 +115,34 @@ impl SharedRelayRoom {
             relay_api_tx,
         });
         let relay_room = RelayRoom::new(admin, shared_relay_room.clone());
-        relay_room_tx.send(relay_room);
+        relay_room_tx.send(relay_room).unwrap();
         shared_relay_room
     }
 
     pub async fn add_relay_player(&self, shared_con: Arc<SharedConnection>) {
         self.relay_api_tx
             .send(RelayRoomAPI::AddRelayPlayer(shared_con))
-            .await;
+            .await
+            .unwrap();
     }
 
     pub async fn send_packet_to_host(&self, packet: Packet) {
         self.relay_api_tx
             .send(RelayRoomAPI::SendToHost(packet))
-            .await;
+            .await
+            .unwrap();
     }
 
     pub async fn send_packet_to_others(&self, index: u32, packet: Packet) {
         self.relay_api_tx
             .send(RelayRoomAPI::SendToOthers(index, packet))
-            .await;
+            .await
+            .unwrap();
+    }
+}
+
+impl Drop for SharedRelayRoom {
+    fn drop(&mut self) {
+        self.handle.abort();
     }
 }

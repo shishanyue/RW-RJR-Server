@@ -5,32 +5,34 @@ mod connection;
 mod connection_manager;
 mod core;
 mod data;
+mod error;
 mod packet;
 mod relay_manager;
-mod server;
-mod worker_pool;
-
 mod rw_engine;
+mod server;
+mod uplist;
+mod worker_pool;
+mod command_center;
+
 
 lazy_static! {
-    static ref NOW: std::time::Instant = { Instant::now() };
+    static ref NOW: std::time::Instant = Instant::now();
 }
 
 use std::{
-    net::SocketAddr,
-    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use crate::{
-    connection_manager::By, data::START_INFO, packet::super_packet::SuperPacket,
-    rw_engine::image::get_image_packet, server::config::*,
+    connection_manager::By, data::START_INFO, packet::super_packet::SuperPacket, server::config::*,
+    uplist::Uplist,
 };
 
 use connection_manager::ConnectionManager;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::{info, warn};
+use crate::command_center::command_center;
 
 use relay_manager::SharedRelayManager;
 use server::ServerConfig;
@@ -65,58 +67,21 @@ async fn main() {
             info!("加载中.....");
             info!("将从如下配置启动\n{}", res);
 
-            let shared_connection_mg = tokio::spawn(start_server(res.server))
-                .await
-                .expect("start server error")
-                .expect("start server error");
-            std::thread::sleep(Duration::from_millis(u64::MAX));
-            let std_in = std::io::stdin();
-            let mut admin_command = String::new();
-            loop {
-                std_in.read_line(&mut admin_command).unwrap();
-                let admin_command = admin_command.trim().to_string();
+            let shared_connection_mg = start_server(res.server).await.expect("start server error");
 
-                for y in 1..200 {
-                    let packet =
-                        SuperPacket::set_terrain(y as f32 * 20. + 500., y as f32 * 20. + 500., "1")
-                            .await;
+            let _uplsit = Uplist::new(
+                "",
+                "RW-RJR",
+                5123,
+                0,
+                100,
+                "RW-RJR",
+                "shishanyue",
+                "192.168.0.1",
+                "开了",
+            );
 
-                    shared_connection_mg
-                        .send_packet_to_player_by(By::Addr(admin_command.clone()), packet)
-                        .await;
-                }
-
-                for y in 1..500 {
-                    let packet = SuperPacket::set_terrain(500., y as f32 * 20. + 500., "1").await;
-
-                    shared_connection_mg
-                        .send_packet_to_player_by(By::Addr(admin_command.clone()), packet)
-                        .await;
-                }
-
-                /*
-                let packets = get_image_packet(Path::new("1.png")).await.unwrap();
-
-                for p in packets{
-                    shared_connection_mg
-                        .send_packet_to_player_by(By::Addr(admin_command.clone()), p)
-                        .await;
-                }
-
-                                for i in 1..200 {
-                    let packet =
-                        SuperPacket::set_terrain(i as f32 * 20. + 500., i as f32 * 20. + 500.)
-                            .await;
-
-                    shared_connection_mg
-                        .send_packet_to_player_by(By::Addr(admin_command.clone()), packet)
-                        .await;
-                }
-
-                 */
-            }
-
-            std::thread::sleep(Duration::from_millis(u64::MAX));
+            command_center(shared_connection_mg).await;
         }
         Err(e) => {
             warn!("{}", e);
@@ -126,17 +91,22 @@ async fn main() {
 }
 
 async fn start_server(server_config: ServerConfig) -> anyhow::Result<Arc<ConnectionManager>> {
-    //准备IP地址信息
-    let listen_addr = format!("{}{}", "0.0.0.0:", server_config.port);
-
     let shared_relay_mg = SharedRelayManager::new(10).await;
 
+    let port_range = server_config.port_range.clone();
     let shared_connection_mg =
         Arc::new(ConnectionManager::new(server_config, shared_relay_mg.clone()).await);
 
-    let listener = TcpListener::bind(&listen_addr).await?;
+    for port_range in port_range {
+        info!("{:?}范围内的Accepter注册成功", port_range);
+        for port in port_range.0..port_range.1 {
+            let listen_addr = format!("{}{}", "0.0.0.0:", port);
+            let listener = TcpListener::bind(&listen_addr).await?;
 
-    tokio::spawn(init_accepter(listener, shared_connection_mg.clone()));
+            tokio::spawn(init_accepter(listener, shared_connection_mg.clone()));
+        }
+    }
+    //准备IP地址信息
 
     Ok(shared_connection_mg)
 }
@@ -145,11 +115,9 @@ async fn init_accepter(
     listener: TcpListener,
     connection_mg: Arc<ConnectionManager>,
 ) -> anyhow::Result<()> {
-    info!("Accepter注册成功");
     loop {
         let new_connection = listener.accept().await?;
         info!("来自{}的新连接", new_connection.1);
-
         connection_mg.new_connection(new_connection).await;
     }
 }

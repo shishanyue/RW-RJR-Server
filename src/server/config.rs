@@ -13,7 +13,7 @@ use toml;
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            port: 5123,
+            port_range: vec![(5123,5123)],
             thread_number: 30,
             enable_web: false,
         }

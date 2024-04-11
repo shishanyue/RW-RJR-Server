@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use std::sync::{atomic::{AtomicI64, AtomicU32, Ordering}, Arc};
 
 use tokio::{
     io::AsyncWriteExt,
     net::tcp::OwnedWriteHalf,
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc, SemaphorePermit},
 };
 
 use crate::{
@@ -19,11 +19,13 @@ pub type SenderData = (
     broadcast::Receiver<ServerCommand>,
 );
 
-pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> {
+pub async fn sender(
+    data: async_channel::Receiver<(SenderData, Arc<AtomicI64>)>,
+) -> anyhow::Result<()> {
     loop {
-        //println!("Sdsd");
         match data.recv().await {
-            Some((shared_con, packet_rx, mut write_half, mut command_rx)) => {
+            Ok(((shared_con, packet_rx, mut write_half, mut command_rx), permit)) => {
+                permit.fetch_add(1, Ordering::Relaxed);
                 loop {
                     tokio::select! {
                         data = packet_rx.recv() => {
@@ -32,7 +34,7 @@ pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> 
 
                                     packet.prepare().await;
                                     //println!("PermissionStatus:{:?}SendPacket:{:?}\n",shared_con.shared_data.player_info.permission_status.read(),packet);
-                                    
+
                                     match write_half
                                     .write_all(&packet.packet_buffer.into_inner())
                                     .await {
@@ -58,8 +60,9 @@ pub async fn sender(mut data: mpsc::Receiver<SenderData>) -> anyhow::Result<()> 
                         }
                     }
                 }
+                permit.fetch_add(-1, Ordering::Relaxed);
             }
-            None => continue,
+            Err(_) => continue,
         }
     }
 }

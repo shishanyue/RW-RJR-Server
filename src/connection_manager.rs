@@ -1,12 +1,14 @@
 mod connection_lib;
 
+use std::sync::RwLock;
 use std::{net::SocketAddr, sync::Arc};
 
 use log::info;
+use tokio::runtime;
 use tokio::{join, net::TcpStream, runtime::Runtime, sync::mpsc, task::JoinHandle};
 
 use crate::connection::ConnectionLibAPI;
-use crate::packet::Packet;
+use crate::packet::{self, Packet};
 use crate::relay_manager::SharedRelayManager;
 use crate::worker_pool::{receiver::receiver, sender::sender};
 use crate::{
@@ -30,6 +32,7 @@ pub struct ConnectionManager {
     pub con_lib_api_tx: Option<mpsc::Sender<ConnectionLibAPI>>,
 }
 
+#[derive(Debug)]
 pub enum By {
     Addr(String),
     Name(String),
@@ -104,131 +107,128 @@ impl ConnectionManager {
         let (processor_sorter_tx, processor_sorter_rx) = mpsc::channel(10);
 
         //处理新连接的进程
-        let runtime = self.runtime.clone().unwrap();
+        let runtime = self
+            .runtime
+            .clone()
+            .expect("clone connection manager runtime error");
         let shared_relay_mg = self.shared_relay_mg.clone();
 
-        self.handle_vec
-            .push(self.runtime.as_ref().unwrap().spawn(async move {
-                //移入receiver和sender的池
-                let mut receiver_pool = receiver_pool;
-                let mut sender_pool = sender_pool;
+        let runtime_ref = self
+            .runtime
+            .as_ref()
+            .expect("get connection manager runtime ref error");
+        self.handle_vec.push(runtime_ref.spawn(async move {
+            //移入receiver和sender的池
+            let mut receiver_pool = receiver_pool;
+            let mut sender_pool = sender_pool;
 
-                let (back_worker_tx, mut back_worker_rx) = mpsc::channel(10);
+            //移入接受新连接的channel
+            let mut new_con_rx: mpsc::Receiver<NewConnectionData> = new_con_rx;
+            //用于发送Packet到另一个进程的channel
+            let processor_sorter_tx = processor_sorter_tx;
+            //用于发送新连接到另一个进程的channel
+            let con_lib_api_tx = con_lib_api_tx;
 
-                //移入接受新连接的channel
-                let mut new_con_rx = new_con_rx;
-                //用于发送Packet到另一个进程的channel
-                let processor_sorter_tx = processor_sorter_tx;
-                //用于发送新连接到另一个进程的channel
-                let con_lib_api_tx = con_lib_api_tx;
+            //
+            let shared_relay_mg = shared_relay_mg;
 
-                //
-                let shared_relay_mg = shared_relay_mg;
+            let runtime = runtime;
+            loop {
+                if let Some((socket, addr)) = new_con_rx.recv().await {
+                    //建立连接并返回SharedConnection
+                    let new_shared_con = Connection::new_shared(
+                        &runtime,
+                        processor_sorter_tx.clone(),
+                        addr,
+                        shared_relay_mg.clone(),
+                        con_lib_api_tx.clone(),
+                    );
+                    let (read_half, write_half) = socket.into_split();
 
-                let runtime = runtime;
-                loop {
-                    //提前获取新连接需要的sender和receiver
-                    let new_receiver = receiver_pool.get_free_worker().await;
-                    let new_sender = sender_pool.get_free_worker().await;
+                    
+                    receiver_pool
+                        .push_task((
+                            new_shared_con.clone(),
+                            read_half,
+                            new_shared_con.shared_channel.command_rx.resubscribe(),
+                        ))
+                        .await.expect("push task to receiver error");
+                    sender_pool
+                        .push_task((
+                            new_shared_con.clone(),
+                            new_shared_con.shared_channel.packet_rx.clone(),
+                            write_half,
+                            new_shared_con.shared_channel.command_rx.resubscribe(),
+                        ))
+                        .await.expect("push task to sender error");
+                    //receiver_pool.push_free_worker(new_receiver).await;
+                    //sender_pool.push_free_worker(new_sender).await;
+                    //绑定socket到receiver和sender上
 
-                    tokio::select! {
-                        
-                        //接受到新连接
-                        Some((socket, addr)) = new_con_rx.recv() => {
-                            //建立连接并返回SharedConnection
-                            let new_shared_con = Connection::new_shared(
-                                &runtime,
-                                new_receiver.clone(),
-                                new_sender.clone(),
-                                processor_sorter_tx.clone(),
-                                addr,
-                                shared_relay_mg.clone(),
-                                back_worker_tx.clone(),
-                                con_lib_api_tx.clone()
-                            );
-
-                            //receiver_pool.push_free_worker(new_receiver).await;
-                            //sender_pool.push_free_worker(new_sender).await;
-                            //绑定socket到receiver和sender上
-                            new_shared_con.bind(new_shared_con.clone(), socket).await;
-
-                            //将新连接存储到Lib里
-                            con_lib_api_tx.send(ConnectionLibAPI::InsertConnection(new_shared_con)).await.unwrap();
-                        },
-                        Some((receiver,sender)) = back_worker_rx.recv() => {
-                            receiver_pool.push_free_worker(receiver).await;
-                            sender_pool.push_free_worker(sender).await;
-                        }
-                    }
-                }
-            }));
-
-        self.handle_vec
-            .push(self.runtime.as_ref().unwrap().spawn(async move {
-                let mut processor_pool = processor_pool;
-                let mut processor_sorter_rx = processor_sorter_rx;
-
-                loop {
-                    let processor = processor_pool.get_free_worker().await;
-
-                    let Some((shared_con, packet)) = processor_sorter_rx.recv().await else {
-                        continue;
-                    };
-
-                    processor
-                        .send((shared_con, packet))
+                    //将新连接存储到Lib里
+                    con_lib_api_tx
+                        .send(ConnectionLibAPI::InsertConnection(new_shared_con))
                         .await
-                        .expect("send packet to processor error");
-
-                    processor_pool.push_free_worker(processor).await;
+                        .expect("send new connection to lib was error");
                 }
-            }));
+            }
+        }));
+
+        self.handle_vec.push(runtime_ref.spawn(async move {
+            let mut processor_pool = processor_pool;
+            let mut processor_sorter_rx = processor_sorter_rx;
+
+            loop {
+                if let Some((shared_con, packet)) = processor_sorter_rx.recv().await {
+                    processor_pool.push_task((shared_con, packet)).await.unwrap();
+                }
+            }
+        }));
 
         self.new_con_tx = Some(new_con_tx);
     }
 
     async fn init_con_lib(&mut self) -> mpsc::Sender<ConnectionLibAPI> {
         let (con_lib_api_tx, con_lib_api_rx) = mpsc::channel(10);
-        self.handle_vec
-            .push(self.runtime.as_ref().unwrap().spawn(async move {
-                let mut connection_lib = ConnectionLib::new();
-                let mut con_lib_api_rx = con_lib_api_rx;
-                loop {
-                    match con_lib_api_rx
-                        .recv()
-                        .await
-                        .expect("Connection API recv error")
-                    {
-                        ConnectionLibAPI::RemoveConnectionByAddr(addr) => {
-                            connection_lib.remove_by_addr(addr)
-                        }
-                        ConnectionLibAPI::InsertConnection(shared_con) => {
-                            connection_lib.insert(shared_con)
-                        }
-                        ConnectionLibAPI::SendPacketToPlayerByUUID() => todo!(),
-                        ConnectionLibAPI::SendPacketToPlayerByName(name, packet) => todo!(),
-                        ConnectionLibAPI::SendPacketToPlayerByAddr(addr, packet) => {
-                            connection_lib
-                                .send_packet_to_player_by_addr(addr, packet)
-                                .await
+        self.handle_vec.push(
+            self.runtime
+                .as_ref()
+                .expect("get connection manager runtime ref error")
+                .spawn(async move {
+                    let mut connection_lib = ConnectionLib::new();
+                    let mut con_lib_api_rx = con_lib_api_rx;
+                    loop {
+                        match con_lib_api_rx
+                            .recv()
+                            .await
+                            .expect("Connection API recv error")
+                        {
+                            ConnectionLibAPI::RemoveConnectionBy(by) => match by {
+                                By::Addr(addr) => {
+                                    connection_lib.remove_by(By::Addr(addr.to_string()))
+                                }
+                                By::Name(_) => todo!(),
+                            },
+                            ConnectionLibAPI::InsertConnection(shared_con) => {
+                                connection_lib.insert(shared_con)
+                            }
+                            ConnectionLibAPI::SendPacketToPlayerBy(by, packet) => {
+                                connection_lib.send_packet_to_player_by(by, packet).await
+                            }
                         }
                     }
-                }
-            }));
+                }),
+        );
         con_lib_api_tx
     }
 
     pub async fn send_packet_to_player_by(&self, by: By, packet: Packet) {
-        match by {
-            By::Addr(addr) => self
-                .con_lib_api_tx
-                .as_ref()
-                .unwrap()
-                .send(ConnectionLibAPI::SendPacketToPlayerByAddr(addr, packet))
-                .await
-                .expect(""),
-            By::Name(_) => todo!(),
-        }
+        self.con_lib_api_tx
+            .as_ref()
+            .unwrap()
+            .send(ConnectionLibAPI::SendPacketToPlayerBy(by, packet))
+            .await
+            .expect("send con_lib_api error");
     }
 
     async fn ne_new(

@@ -1,20 +1,17 @@
-mod error;
-
 use std::io::Cursor;
 
+use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
 use std::{sync::Arc, usize};
 
 use crate::connection::shared_connection::SharedConnection;
 
 use crate::core::ServerCommand;
+use crate::error::ReceiverError;
 use crate::packet::{Packet, PacketType};
-use crate::worker_pool::receiver::error::ErrorKind;
 
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, SemaphorePermit};
 
-use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf, sync::mpsc};
-
-use self::error::Error;
+use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
 pub type ReceiverData = (
     Arc<SharedConnection>,
@@ -28,16 +25,10 @@ async fn receiver_fn(read_half: &mut OwnedReadHalf) -> anyhow::Result<Packet> {
     let packet_type = PacketType::try_from(read_half.read_u32().await?).unwrap_or_default();
 
     if packet_length <= 0 {
-        Err(Error::new(
-            ErrorKind::InvalidInput,
-            "packet length below zero",
-        ))?
+        return Err(ReceiverError::InvalidInput("packet length below zero".to_string()).into());
     }
     if packet_length >= 1024 * 50 || packet_type == PacketType::NOT_RESOLVED {
-        Err(Error::new(
-            ErrorKind::InvalidInput,
-            "packet length too long",
-        ))?
+        return Err(ReceiverError::InvalidInput("packet length too long".to_string()).into());
     }
 
     let mut packet_buffer = vec![0; packet_length as usize];
@@ -50,10 +41,13 @@ async fn receiver_fn(read_half: &mut OwnedReadHalf) -> anyhow::Result<Packet> {
     ))
 }
 
-pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<()> {
+pub async fn receiver(
+    data: async_channel::Receiver<(ReceiverData, Arc<AtomicI64>)>,
+) -> anyhow::Result<()> {
     loop {
         match data.recv().await {
-            Some((shared_con, mut read_half, mut command_rx)) => {
+            Ok(((shared_con, mut read_half, mut command_rx), permit)) => {
+                permit.fetch_add(1, Ordering::Relaxed);
                 loop {
                     tokio::select! {
                         recv = receiver_fn(&mut read_half) => {
@@ -81,8 +75,9 @@ pub async fn receiver(mut data: mpsc::Receiver<ReceiverData>) -> anyhow::Result<
                         }
                     }
                 }
+                permit.fetch_add(-1, Ordering::Relaxed);
             }
-            None => continue,
+            Err(_) => continue,
         }
     }
 }

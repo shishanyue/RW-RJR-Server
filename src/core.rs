@@ -11,5 +11,5 @@ pub async fn creat_block_runtime(threads: usize) -> anyhow::Result<Runtime> {
         .worker_threads(threads)
         // no timer!
         .build()
-        .unwrap())
+        .expect("creat block runtime error"))
 }

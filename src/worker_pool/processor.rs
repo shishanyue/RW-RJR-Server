@@ -1,6 +1,7 @@
-use std::sync::{atomic::Ordering, Arc};
+use std::sync::{atomic::{AtomicI64, AtomicU32, Ordering}, Arc};
 
-use tokio::sync::mpsc;
+
+use tokio::sync::SemaphorePermit;
 
 use crate::{
     connection::{permission_status::PermissionStatus, shared_connection::SharedConnection},
@@ -9,10 +10,11 @@ use crate::{
 
 pub type ProcesseorData = (Arc<SharedConnection>, Packet);
 
-pub async fn processor(mut data: mpsc::Receiver<ProcesseorData>) -> anyhow::Result<()> {
+pub async fn processor(data: async_channel::Receiver<(ProcesseorData,Arc<AtomicI64>)>) -> anyhow::Result<()> {
     loop {
         match data.recv().await {
-            Some((shared_con, packet)) => {
+            Ok(((shared_con, packet),permit)) => {
+                permit.fetch_add(1, Ordering::Relaxed);
                 let packet_type = packet.packet_type;
                 let player_info_arc = shared_con.shared_data.player_info.clone();
                 let connection_info_arc = shared_con.shared_data.connection_info.clone();
@@ -104,8 +106,9 @@ pub async fn processor(mut data: mpsc::Receiver<ProcesseorData>) -> anyhow::Resu
                         _ => {}
                     },
                 };
+                permit.fetch_add(-1, Ordering::Relaxed);
             }
-            None => continue,
+            Err(_) => continue,
         }
     }
 }

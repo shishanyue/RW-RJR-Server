@@ -20,6 +20,7 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::{
+    connection_manager::By,
     core::ServerCommand,
     packet::{Packet, PacketReadWriteExt, PacketType},
     relay_manager::{relay::SharedRelayRoom, SharedRelayManager},
@@ -49,8 +50,6 @@ pub struct ConnectionInfo {
 
 #[derive(Debug)]
 pub struct ConnectionChannel {
-    pub receiver: mpsc::Sender<ReceiverData>,
-    pub sender: mpsc::Sender<SenderData>,
     pub processor_sorter_tx: mpsc::Sender<ProcesseorData>,
     pub con_api_tx: mpsc::Sender<ConnectionAPI>,
     pub packet_tx: async_channel::Sender<Packet>,
@@ -89,23 +88,18 @@ pub struct Connection {
     pub room_index: Option<u32>,
     pub shared_relay_room: Option<Arc<SharedRelayRoom>>,
     pub is_disconnected: Semaphore,
-    back_worker_tx: mpsc::Sender<WorkersSender>,
     con_lib_api_tx: mpsc::Sender<ConnectionLibAPI>,
 }
 
 #[derive(Debug)]
 pub enum ConnectionLibAPI {
     InsertConnection(Arc<SharedConnection>),
-    RemoveConnectionByAddr(SocketAddr),
-    SendPacketToPlayerByUUID(),
-    SendPacketToPlayerByName(String, Packet),
-    SendPacketToPlayerByAddr(String, Packet),
+    RemoveConnectionBy(By),
+    SendPacketToPlayerBy(By, Packet),
 }
 
 impl ConnectionChannel {
     pub fn new(
-        receiver: mpsc::Sender<ReceiverData>,
-        sender: mpsc::Sender<SenderData>,
         processor_sorter_tx: mpsc::Sender<ProcesseorData>,
         con_api_tx: mpsc::Sender<ConnectionAPI>,
     ) -> Self {
@@ -113,8 +107,6 @@ impl ConnectionChannel {
         let (command_tx, command_rx) = broadcast::channel(5);
 
         ConnectionChannel {
-            receiver,
-            sender,
             processor_sorter_tx,
             con_api_tx,
             packet_rx,
@@ -128,12 +120,9 @@ impl ConnectionChannel {
 impl Connection {
     pub fn new_shared(
         runtime: &Arc<Runtime>,
-        new_receiver: mpsc::Sender<ReceiverData>,
-        new_sender: mpsc::Sender<SenderData>,
         processor_sorter_sender: mpsc::Sender<ProcesseorData>,
         addr: SocketAddr,
         shared_relay_mg: Arc<SharedRelayManager>,
-        back_worker_tx: mpsc::Sender<WorkersSender>,
         con_lib_api_tx: mpsc::Sender<ConnectionLibAPI>,
     ) -> Arc<SharedConnection> {
         let (con_api_tx, con_api_rx) = mpsc::channel(10);
@@ -147,16 +136,10 @@ impl Connection {
             room_index: None,
             shared_relay_room: None,
             is_disconnected: Semaphore::new(1),
-            back_worker_tx,
             con_lib_api_tx,
         };
 
-        let shared_channel = Arc::new(ConnectionChannel::new(
-            new_receiver,
-            new_sender,
-            processor_sorter_sender,
-            con_api_tx,
-        ));
+        let shared_channel = Arc::new(ConnectionChannel::new(processor_sorter_sender, con_api_tx));
 
         let shared_data = Arc::new(SharedConnectionData::new_with_addr(Arc::downgrade(
             &con.addr,
@@ -309,7 +292,7 @@ impl Connection {
         packet.packet_buffer.write_u8(1).await.unwrap();
         packet.packet_buffer.write_u32(5).await.unwrap();
 
-        packet.write_string(msg).await;
+        packet.write_string(msg).await.unwrap();
 
         self.shared_con.as_ref().unwrap().send_packet(packet).await;
     }
@@ -317,7 +300,7 @@ impl Connection {
     pub async fn chat_message_packet_internal(&mut self, sender: &str, msg: &str, team: u32) {
         let mut packet = Packet::new(PacketType::CHAT).await;
 
-        packet.write_string(msg).await;
+        packet.write_string(msg).await.unwrap();
 
         packet.packet_buffer.write_u8(3).await.unwrap();
 
@@ -509,41 +492,26 @@ impl Connection {
     }
 
     pub async fn disconnect(&mut self) {
-        match self.is_disconnected.acquire().await {
-            Ok(_) => {
-                if !self.is_disconnected.is_closed() {
-                    self.is_disconnected.close();
+        if (self.is_disconnected.acquire().await).is_ok() {
+            self.is_disconnected.close();
 
-                    let shared_channel = self.shared_con.as_ref().unwrap().shared_channel.as_ref();
-                    //println!("is_disconnected");
+            let shared_channel = self.shared_con.as_ref().unwrap().shared_channel.as_ref();
 
-                    self.back_worker_tx
-                        .send((
-                            shared_channel.receiver.clone(),
-                            shared_channel.sender.clone(),
-                        ))
-                        .await
-                        .unwrap();
+            shared_channel
+                .command_tx
+                .send(ServerCommand::Disconnect)
+                .unwrap();
 
-                    shared_channel
-                        .command_tx
-                        .send(ServerCommand::Disconnect)
-                        .unwrap();
+            self.con_lib_api_tx
+                .send(ConnectionLibAPI::RemoveConnectionBy(By::Addr(
+                    self.addr.to_string(),
+                )))
+                .await
+                .expect("remove con error");
 
-                    self.con_lib_api_tx
-                        .send(ConnectionLibAPI::RemoveConnectionByAddr(*self.addr.clone()))
-                        .await
-                        .expect("remove con error");
-
-                    self.shared_con
-                        .take()
-                        .expect("remove shared_con error when disconnect");
-                }
-            }
-            Err(e) => {
-                warn!("{}", e);
-                panic!("{}", e)
-            }
-        };
+            self.shared_con
+                .take()
+                .expect("remove shared_con error when disconnect");
+        }
     }
 }

@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use chrono::{Datelike, Timelike, Utc};
 use rand::{Rng, SeedableRng};
 use tokio::{
     runtime::Runtime,
@@ -82,13 +83,14 @@ impl SharedRelayManager {
                 }
             }
         });
-
+        let now = Utc::now();
         Arc::new(Self {
             relay_mg_api_tx,
             handle,
             relay_rt: runtime,
             id_rand: Arc::new(RwLock::new(SeedableRng::seed_from_u64(
-                NOW.elapsed().as_secs(),
+                NOW.elapsed().as_secs()
+                    + (now.hour() + now.month() + now.day() + now.minute() + now.second()) as u64,
             ))),
         })
     }
@@ -145,5 +147,11 @@ impl RelayManager {
         Self {
             room_map: HashMap::new(),
         }
+    }
+}
+
+impl Drop for SharedRelayManager {
+    fn drop(&mut self) {
+        self.handle.abort();
     }
 }

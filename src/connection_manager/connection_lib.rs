@@ -1,14 +1,12 @@
-use std::{
-    collections::{hash_map::Iter, HashMap},
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{connection::shared_connection::SharedConnection, packet::Packet};
 
+use super::By;
+
 pub struct ConnectionLib {
-    addr_map: HashMap<Arc<SocketAddr>, Arc<SharedConnection>>, //main key
-    player_name_map: HashMap<String, SocketAddr>,
+    addr_map: HashMap<String, Arc<SharedConnection>>, //main key
+    player_name_map: HashMap<String, String>,
 }
 
 impl ConnectionLib {
@@ -20,15 +18,7 @@ impl ConnectionLib {
     }
 
     pub fn insert(&mut self, shared_con: Arc<SharedConnection>) {
-        println!(
-            "addr:{}",
-            shared_con
-                .shared_data
-                .connection_info
-                .addr
-                .upgrade()
-                .unwrap()
-        );
+        
 
         self.addr_map.insert(
             shared_con
@@ -36,30 +26,30 @@ impl ConnectionLib {
                 .connection_info
                 .addr
                 .upgrade()
-                .unwrap(),
+                .expect("get con addr error")
+                .to_string(),
             shared_con,
         );
     }
 
-    pub fn get_iter(&self) -> Iter<'_, Arc<SocketAddr>, Arc<SharedConnection>> {
-        self.addr_map.iter()
-    }
-
-    pub fn send_packet_to_player_by_name(&self, name: String, packet: Packet) {
-        todo!()
-    }
-
-    pub async fn send_packet_to_player_by_addr(&self, addr: String, packet: Packet) {
-        for (con_addr, con) in self.addr_map.iter() {
-            println!("{}", &con_addr.to_string());
-            if con_addr.to_string() == addr {
-                println!("superPacket:{:?}", packet);
-                con.send_packet(packet.clone()).await
+    pub async fn send_packet_to_player_by(&self, by: By, packet: Packet) {
+        match by {
+            By::Addr(addr) => {
+                dbg!(self.addr_map.contains_key(&addr));
+                if let Some(con) = self.addr_map.get(&addr) {
+                    con.send_packet(packet.clone()).await;
+                }
             }
+            By::Name(_) => todo!(),
         }
     }
 
-    pub fn remove_by_addr(&mut self, addr: SocketAddr) {
-        self.addr_map.remove(&addr);
+    pub fn remove_by(&mut self, by: By) {
+        match by {
+            By::Addr(addr) => {
+                self.addr_map.remove(&addr);
+            }
+            By::Name(_) => todo!(),
+        }
     }
 }
