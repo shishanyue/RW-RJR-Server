@@ -7,7 +7,7 @@ use tokio::{
 };
 
 use crate::{
-    connection::{shared_connection::SharedConnection, WorkersSender},
+    connection::shared_connection::SharedConnection,
     core::ServerCommand,
     packet::Packet,
 };

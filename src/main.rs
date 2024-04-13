@@ -8,11 +8,14 @@ mod data;
 mod error;
 mod packet;
 mod relay_manager;
-mod rw_engine;
 mod server;
 mod uplist;
 mod worker_pool;
 mod command_center;
+mod dummy;
+mod module;
+mod event;
+
 
 
 lazy_static! {
@@ -25,8 +28,7 @@ use std::{
 };
 
 use crate::{
-    connection_manager::By, data::START_INFO, packet::super_packet::SuperPacket, server::config::*,
-    uplist::Uplist,
+    connection_manager::By, data::START_INFO, event::init_event_system, packet::super_packet::SuperPacket, server::config::*, uplist::Uplist
 };
 
 use connection_manager::ConnectionManager;
@@ -66,6 +68,8 @@ async fn main() {
             println!("{}", START_INFO);
             info!("加载中.....");
             info!("将从如下配置启动\n{}", res);
+
+            init_event_system().expect("event system init error");
 
             let shared_connection_mg = start_server(res.server).await.expect("start server error");
 

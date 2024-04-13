@@ -1,6 +1,8 @@
 pub mod super_packet;
+pub mod common_packet;
 
-use std::io::Cursor;
+
+use std::io::{self, Cursor};
 
 use num_enum::TryFromPrimitive;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -134,9 +136,16 @@ impl Packet {
 pub trait PacketReadWriteExt {
     async fn read_string(&mut self) -> Option<String>;
     async fn read_if_is_string(&mut self) -> Option<String>;
-    async fn write_string(&mut self, s: &str) -> std::io::Result<usize>;
-    async fn write_is_string(&mut self, s: &str) -> std::io::Result<usize>;
+    async fn write_string(&mut self, s: &str) -> io::Result<usize>;
+    async fn write_is_string(&mut self, s: &str) -> io::Result<usize>;
     async fn read_stream_bytes(&mut self) -> Vec<u8>;
+    async fn write_u8(&mut self,n: u8) -> io::Result<()>;
+    async fn write_u32(&mut self,n: u32) -> io::Result<()>;
+    async fn write_u64(&mut self,n: u64) -> io::Result<()>;
+    async fn write_u16(&mut self,n: u16) -> io::Result<()>;
+    async fn write_f32(&mut self,n: f32) -> io::Result<()>;
+    async fn write_all(&mut self,buf: &[u8]) -> io::Result<()>;
+    
 }
 
 impl PacketReadWriteExt for Packet {
@@ -153,11 +162,11 @@ impl PacketReadWriteExt for Packet {
             None
         }
     }
-    async fn write_string(&mut self, s: &str) -> std::io::Result<usize> {
+    async fn write_string(&mut self, s: &str) -> io::Result<usize> {
         self.packet_buffer.write_u16(s.len() as u16).await.unwrap();
         self.packet_buffer.write(s.as_bytes()).await
     }
-    async fn write_is_string(&mut self, s: &str) -> std::io::Result<usize> {
+    async fn write_is_string(&mut self, s: &str) -> io::Result<usize> {
         if s.is_empty() {
             self.packet_buffer.write_u8(0).await.unwrap();
             Ok(0)
@@ -175,5 +184,29 @@ impl PacketReadWriteExt for Packet {
             .unwrap();
 
         packet_bytes
+    }
+    
+    async fn write_u8(&mut self,n: u8) -> io::Result<()> {
+        self.packet_buffer.write_u8(n).await
+    }
+    
+    async fn write_u32(&mut self,n: u32) -> io::Result<()> {
+        self.packet_buffer.write_u32(n).await
+    }
+    
+    async fn write_u64(&mut self,n: u64) -> io::Result<()> {
+        self.packet_buffer.write_u64(n).await
+    }
+    
+    async fn write_all(&mut self,buf: &[u8]) -> io::Result<()> {
+        self.packet_buffer.write_all(buf).await
+    }
+    
+    async fn write_f32(&mut self,n: f32) -> io::Result<()> {
+        self.packet_buffer.write_f32(n).await
+    }
+    
+    async fn write_u16(&mut self,n: u16) -> io::Result<()> {
+        self.packet_buffer.write_u16(n).await
     }
 }

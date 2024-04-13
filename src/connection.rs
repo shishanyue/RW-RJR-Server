@@ -22,6 +22,7 @@ use uuid::Uuid;
 use crate::{
     connection_manager::By,
     core::ServerCommand,
+    event::{Event, EventType, EVENT_CHANNEL},
     packet::{Packet, PacketReadWriteExt, PacketType},
     relay_manager::{relay::SharedRelayRoom, SharedRelayManager},
     worker_pool::{processor::ProcesseorData, receiver::ReceiverData, sender::SenderData},
@@ -75,8 +76,6 @@ pub enum ConnectionAPI {
     SendPacketToOthers(Packet),
     AddRelayConnect,
 }
-
-pub type WorkersSender = (mpsc::Sender<ReceiverData>, mpsc::Sender<SenderData>);
 
 #[derive(Debug)]
 pub struct Connection {
@@ -150,10 +149,10 @@ impl Connection {
 
     pub async fn send_relay_server_info(&self) {
         let mut packet = Packet::new(PacketType::RELAY_VERSION_INFO).await;
-        packet.packet_buffer.write_u8(0).await.unwrap();
-        packet.packet_buffer.write_u32(151).await.unwrap();
-        packet.packet_buffer.write_u32(1).await.unwrap();
-        packet.packet_buffer.write_u8(0).await.unwrap();
+        packet.write_u8(0).await.unwrap();
+        packet.write_u32(151).await.unwrap();
+        packet.write_u32(1).await.unwrap();
+        packet.write_u8(0).await.unwrap();
         self.shared_con.as_ref().unwrap().send_packet(packet).await;
     }
 
@@ -170,7 +169,7 @@ impl Connection {
         let mut send_packet =
             Packet::new(PacketType::try_from(packet_type).unwrap_or_default()).await;
 
-        send_packet.packet_buffer.write_all(&bytes).await.unwrap();
+        send_packet.write_all(&bytes).await.unwrap();
 
         if packet_type == PacketType::KICK as u32 {
             // TODO
@@ -238,8 +237,8 @@ impl Connection {
             )
             .await
             .unwrap();
-        packet.packet_buffer.write_u8(1).await.unwrap();
-        packet.packet_buffer.write_u8(60).await.unwrap();
+        packet.write_u8(1).await.unwrap();
+        packet.write_u8(60).await.unwrap();
 
         self.shared_con.as_ref().unwrap().send_packet(packet).await;
     }
@@ -289,8 +288,8 @@ impl Connection {
 
     pub async fn send_relay_hall_message(&self, msg: &str) {
         let mut packet = Packet::new(PacketType::RELAY_117).await;
-        packet.packet_buffer.write_u8(1).await.unwrap();
-        packet.packet_buffer.write_u32(5).await.unwrap();
+        packet.write_u8(1).await.unwrap();
+        packet.write_u32(5).await.unwrap();
 
         packet.write_string(msg).await.unwrap();
 
@@ -302,12 +301,12 @@ impl Connection {
 
         packet.write_string(msg).await.unwrap();
 
-        packet.packet_buffer.write_u8(3).await.unwrap();
+        packet.write_u8(3).await.unwrap();
 
         packet.write_is_string(sender).await.unwrap();
 
-        packet.packet_buffer.write_u32(team).await.unwrap();
-        packet.packet_buffer.write_u32(team).await.unwrap();
+        packet.write_u32(team).await.unwrap();
+        packet.write_u32(team).await.unwrap();
 
         self.shared_con.as_ref().unwrap().send_packet(packet).await;
     }
@@ -329,7 +328,7 @@ impl Connection {
             .load(Ordering::Relaxed)
             >= NEW_RELAY_PROTOCOL_VERSION
         {
-            packet.packet_buffer.write_u8(1).await.unwrap();
+            packet.write_u8(1).await.unwrap();
             packet
                 .packet_buffer
                 .write_u32(*self.room_index.as_ref().unwrap())
@@ -341,7 +340,7 @@ impl Connection {
                 .await
                 .expect("write packet error");
 
-            packet.packet_buffer.write_u8(0).await.unwrap();
+            packet.write_u8(0).await.unwrap();
 
             packet
                 .write_is_string(&self.addr.ip().to_string())
@@ -450,11 +449,11 @@ impl Connection {
         let public = false;
 
         if shared_relay_room.shared_data.custom.version >= NEW_RELAY_PROTOCOL_VERSION {
-            packet.packet_buffer.write_u8(2).await.unwrap();
+            packet.write_u8(2).await.unwrap();
 
-            packet.packet_buffer.write_u8(1).await.unwrap();
-            packet.packet_buffer.write_u8(1).await.unwrap();
-            packet.packet_buffer.write_u8(1).await.unwrap();
+            packet.write_u8(1).await.unwrap();
+            packet.write_u8(1).await.unwrap();
+            packet.write_u8(1).await.unwrap();
 
             packet
                 .write_string("RJR Team")
@@ -467,8 +466,8 @@ impl Connection {
                 .await
                 .unwrap();
 
-            packet.packet_buffer.write_u8(public as u8).await.unwrap();
-            packet.packet_buffer.write_u8(1).await.unwrap();
+            packet.write_u8(public as u8).await.unwrap();
+            packet.write_u8(1).await.unwrap();
 
             packet
                 .write_string(&format!(
@@ -478,7 +477,7 @@ impl Connection {
                 .await
                 .expect("write packet error");
 
-            packet.packet_buffer.write_u8(public as u8).await.unwrap();
+            packet.write_u8(public as u8).await.unwrap();
 
             packet
                 .write_is_string(&Uuid::new_v4().to_string())
@@ -489,6 +488,14 @@ impl Connection {
         }
 
         self.shared_con.as_ref().unwrap().send_packet(packet).await;
+
+        EVENT_CHANNEL
+            .0
+            .send(Event::new(
+                "abab",
+                EventType::NewRoomAndHostOk(self.shared_relay_room.as_ref().unwrap().clone()),
+            ))
+            .await.expect("send event error");
     }
 
     pub async fn disconnect(&mut self) {

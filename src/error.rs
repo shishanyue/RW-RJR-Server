@@ -16,3 +16,8 @@ pub enum ReceiverError {
     #[error("`{0}`")]
     InvalidInput(String)
 }
+#[derive(Error, Debug)]
+pub enum BasicDummyError {
+    #[error("join to relay error mag: {0}")]
+    JoinRelayError(&'static str)
+}

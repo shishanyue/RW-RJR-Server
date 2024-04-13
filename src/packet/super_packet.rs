@@ -54,8 +54,8 @@ impl SuperPacket {
             .await
             .expect("error");
 
-        packet.packet_buffer.write_f32(x).await.expect("error");
-        packet.packet_buffer.write_f32(y).await.expect("error");
+        packet.write_f32(x).await.expect("error");
+        packet.write_f32(y).await.expect("error");
 
         packet
             .packet_buffer
@@ -67,9 +67,9 @@ impl SuperPacket {
             .write_string(&format!("SetTerrainType{}", terrain_name))
             .await
             .expect("error");
-        packet.packet_buffer.write_u32(0).await.unwrap();
-        packet.packet_buffer.write_u32(0).await.unwrap();
-        packet.packet_buffer.write_u8(0).await.unwrap();
+        packet.write_u32(0).await.unwrap();
+        packet.write_u32(0).await.unwrap();
+        packet.write_u8(0).await.unwrap();
 
         Self::packet_to_host(packet).await
     }
@@ -78,7 +78,7 @@ impl SuperPacket {
         packet.prepare().await;
         let mut send_packet = Packet::new(PacketType::PACKET_FORWARD_CLIENT_FROM).await;
 
-        send_packet.packet_buffer.write_u32(0).await.unwrap();
+        send_packet.write_u32(0).await.unwrap();
         send_packet
             .packet_buffer
             .write_u32(packet.packet_length + 8)
