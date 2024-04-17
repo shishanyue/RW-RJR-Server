@@ -13,7 +13,7 @@ impl CommonPacket {
         query_string: &str,
     ) -> std::io::Result<Packet> {
         let mut packet = Packet::new(PacketType::PREREGISTER_INFO_RECEIVE).await;
-        packet.write_string(&domain).await.unwrap();
+        packet.write_string(domain).await.unwrap();
 
         packet.write_u32(packet_version).await.unwrap();
         packet.write_u32(client_version).await.unwrap();
@@ -26,7 +26,7 @@ impl CommonPacket {
         }
 
         if packet_version >= 3 {
-            packet.write_string(&dummy_name).await.unwrap();
+            packet.write_string(dummy_name).await.unwrap();
         }
 
         packet.write_string("zh").await.unwrap();

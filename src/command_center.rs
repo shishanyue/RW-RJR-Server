@@ -1,30 +1,50 @@
 use std::{sync::Arc, time::Duration};
 
-use log::info;
+use log::{info, warn};
 
 use crate::{
     connection_manager::{By, ConnectionManager},
-    event::{self, EVENT_CHANNEL_MULTIPLE},
+    event::{self, EventType, EVENT_CHANNEL_MULTIPLE},
     module::{ModuleType, MODULE_MANAGER},
-    packet::super_packet::SuperPacket,
+    packet::{self, super_packet::SuperPacket, PacketReadWriteExt, PacketType},
 };
 
 pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
     let mut event_receiver = EVENT_CHANNEL_MULTIPLE.1.resubscribe();
 
-    MODULE_MANAGER
-        .write()
-        .unwrap()
-        .init_module(ModuleType::RwEngine);
+    //MODULE_MANAGER
+    //    .write()
+    //    .unwrap()
+    //    .init_module(ModuleType::RwEngine);
 
-    //let std_in = std::io::stdin();
-    //let mut admin_command = String::new();
+    let std_in = std::io::stdin();
+    let mut admin_command = String::new();
+
+    std_in.read_line(&mut admin_command).unwrap();
+    let admin_command = admin_command.trim().to_string();
+    println!("Ok");
     loop {
         match event_receiver.recv().await {
-            Ok(event) => {
-                info!("{:?}",event.event_name)
+            Ok(event) => match event.event_type {
+                EventType::NewPacket(_, mut packet, PacketType::CHAT_RECEIVE) => {
+                    let message = packet.read_string().await.unwrap();
+
+                    let mut arg = message.split_whitespace();
+                    
+                    if arg.next() == Some("RwEnigne"){
+                        let packet = SuperPacket::set_terrain(arg.next().unwrap().parse().unwrap(), arg.next().unwrap().parse().unwrap(), "1").await;
+
+                        shared_connection_mg
+                            .send_packet_to_player_by(By::Addr(admin_command.clone()), packet)
+                            .await;
+                    }
+
+                }
+                EventType::NewPacket(_, mut packet, PacketType::CHAT) => {
+                }
+                _ => {}
             },
-            Err(_) => todo!(),
+            Err(e) => panic!("{}", e),
         };
 
         /*

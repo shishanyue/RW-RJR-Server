@@ -20,6 +20,7 @@ pub type ReceiverData = (
 );
 
 pub async fn receiver_fn(read_half: &mut OwnedReadHalf) -> anyhow::Result<Packet> {
+
     let packet_length = read_half.read_i32().await?;
 
     let packet_type = PacketType::try_from(read_half.read_u32().await?).unwrap_or_default();

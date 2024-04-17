@@ -4,13 +4,13 @@ use std::sync::{atomic::{AtomicI64, AtomicU32, Ordering}, Arc};
 use tokio::sync::SemaphorePermit;
 
 use crate::{
-    connection::{permission_status::PermissionStatus, shared_connection::SharedConnection},
-    packet::{Packet, PacketType},
+    connection::{permission_status::PermissionStatus, shared_connection::SharedConnection}, event::{Event, EventType, EVENT_CHANNEL}, packet::{Packet, PacketType}
 };
 
 pub type ProcesseorData = (Arc<SharedConnection>, Packet);
 
 pub async fn processor(data: async_channel::Receiver<(ProcesseorData,Arc<AtomicI64>)>) -> anyhow::Result<()> {
+    let event_sender = EVENT_CHANNEL.0.clone();
     loop {
         match data.recv().await {
             Ok(((shared_con, packet),permit)) => {
@@ -21,6 +21,8 @@ pub async fn processor(data: async_channel::Receiver<(ProcesseorData,Arc<AtomicI
                 let permission = *player_info_arc.permission_status.read().unwrap();
 
                 shared_con.set_packet(packet.clone()).await;
+
+                event_sender.send(Event::new("NewPacket",EventType::NewPacket(shared_con.clone(),packet.clone(),packet_type))).await.expect("send event error");
 
                 match permission {
                     PermissionStatus::InitialConnection => match packet_type {

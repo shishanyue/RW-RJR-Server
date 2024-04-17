@@ -19,5 +19,7 @@ pub enum ReceiverError {
 #[derive(Error, Debug)]
 pub enum BasicDummyError {
     #[error("join to relay error mag: {0}")]
-    JoinRelayError(&'static str)
+    JoinRelayError(&'static str),
+    #[error("未连接到服务器")]
+    YetNotConnectToRelay
 }

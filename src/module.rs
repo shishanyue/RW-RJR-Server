@@ -12,6 +12,7 @@ lazy_static! {
     .enable_time()
     .worker_threads(10)
     // no timer!
+    .enable_io()
     .build()
     .expect("creat block runtime error");
     pub static ref MODULE_MANAGER: Arc<RwLock<ModuleManager>> = Arc::new(RwLock::new(ModuleManager::new()));

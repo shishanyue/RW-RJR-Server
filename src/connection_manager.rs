@@ -71,7 +71,7 @@ impl ConnectionManager {
         .await;
 
         let processor_pool = new_worker_pool(
-            1,
+            10,
             move |p_receiver, _| Box::pin(processor(p_receiver)),
             processor_block_rt,
             (),

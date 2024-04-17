@@ -194,6 +194,7 @@ impl PacketReadWriteExt for Packet {
         self.packet_buffer.write_u32(n).await
     }
     
+    
     async fn write_u64(&mut self,n: u64) -> io::Result<()> {
         self.packet_buffer.write_u64(n).await
     }
