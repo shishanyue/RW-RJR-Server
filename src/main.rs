@@ -73,18 +73,6 @@ async fn main() {
 
             let shared_connection_mg = start_server(res.server).await.expect("start server error");
 
-            let _uplsit = Uplist::new(
-                "",
-                "RW-RJR",
-                5123,
-                0,
-                100,
-                "RW-RJR",
-                "shishanyue",
-                "192.168.0.1",
-                "开了",
-            );
-
             command_center(shared_connection_mg).await;
         }
         Err(e) => {
