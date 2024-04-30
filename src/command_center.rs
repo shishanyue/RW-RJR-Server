@@ -10,6 +10,7 @@ use crate::{
 };
 
 pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
+    std::thread::sleep(Duration::from_millis(u64::MAX));
     let mut event_receiver = EVENT_CHANNEL_MULTIPLE.1.resubscribe();
 
     //MODULE_MANAGER
@@ -22,7 +23,7 @@ pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
 
     std_in.read_line(&mut admin_command).unwrap();
     let admin_command = admin_command.trim().to_string();
-    println!("Ok");
+    //println!("Ok");
     loop {
         match event_receiver.recv().await {
             Ok(event) => match event.event_type {
