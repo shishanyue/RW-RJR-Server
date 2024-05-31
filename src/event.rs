@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use log::info;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast};
 
 use crate::{
     connection::shared_connection::SharedConnection,

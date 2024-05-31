@@ -5,7 +5,6 @@ use tokio::runtime::{Builder, Runtime};
 use self::rw_engine::RwEngine;
 
 mod rw_engine;
-mod easy_dummy;
 
 lazy_static! {
     static ref MODULE_RUNTIME:Runtime = Builder::new_multi_thread()

@@ -17,9 +17,7 @@ pub enum ReceiverError {
     InvalidInput(String)
 }
 #[derive(Error, Debug)]
-pub enum BasicDummyError {
+pub enum DummyError {
     #[error("join to relay error mag: {0}")]
-    JoinRelayError(&'static str),
-    #[error("未连接到服务器")]
-    YetNotConnectToRelay
+    JoinRelayError(#[from] std::io::Error),
 }

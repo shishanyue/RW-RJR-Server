@@ -1,7 +1,6 @@
-use std::sync::{atomic::{AtomicI64, AtomicU32, Ordering}, Arc};
+use std::sync::{atomic::{AtomicI64, Ordering}, Arc};
 
 
-use tokio::sync::SemaphorePermit;
 
 use crate::{
     connection::{permission_status::PermissionStatus, shared_connection::SharedConnection}, event::{Event, EventType, EVENT_CHANNEL}, packet::{Packet, PacketType}
@@ -10,7 +9,6 @@ use crate::{
 pub type ProcesseorData = (Arc<SharedConnection>, Packet);
 
 pub async fn processor(data: async_channel::Receiver<(ProcesseorData,Arc<AtomicI64>)>) -> anyhow::Result<()> {
-    let event_sender = EVENT_CHANNEL.0.clone();
     loop {
         match data.recv().await {
             Ok(((shared_con, packet),permit)) => {
@@ -22,7 +20,13 @@ pub async fn processor(data: async_channel::Receiver<(ProcesseorData,Arc<AtomicI
 
                 shared_con.set_packet(packet.clone()).await;
 
-                event_sender.send(Event::new("NewPacket",EventType::NewPacket(shared_con.clone(),packet.clone(),packet_type))).await.expect("send event error");
+                let move_data = (shared_con.clone(),packet.clone(),packet_type);
+                tokio::spawn(async move {
+
+                    let event_sender = EVENT_CHANNEL.0.clone();
+                    event_sender.send(Event::new("NewPacket",EventType::NewPacket(move_data.0,move_data.1,move_data.2))).await.expect("send event error");
+
+                });
 
                 match permission {
                     PermissionStatus::InitialConnection => match packet_type {

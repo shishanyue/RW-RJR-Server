@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::{sync::Arc, usize};
 
 use crate::connection::shared_connection::SharedConnection;
@@ -9,7 +9,7 @@ use crate::core::ServerCommand;
 use crate::error::ReceiverError;
 use crate::packet::{Packet, PacketType};
 
-use tokio::sync::{broadcast, SemaphorePermit};
+use tokio::sync::{broadcast};
 
 use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
@@ -54,7 +54,6 @@ pub async fn receiver(
                         recv = receiver_fn(&mut read_half) => {
                             match recv {
                                 Ok(packet) => {
-                                    //println!("PermissionStatus:{:?}ReceiverPacket:{:?}\n",shared_con.shared_data.player_info.permission_status.read(),packet);
                                     shared_con.type_relay(shared_con.clone(), packet).await;
                                     continue;
                                 }

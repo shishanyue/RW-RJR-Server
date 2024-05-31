@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use chrono::{Timelike, Utc};
 use log::info;
@@ -6,6 +6,7 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use reqwest::Client;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+
 
 type Token = String;
 type ServerUuid = String;
@@ -26,13 +27,13 @@ pub struct UplistData {
     game_map: String,
     created_by: String,
     private_ip: String,
-    game_status:String,
+    game_status: String,
 }
 
-pub struct Uplist(
-    Arc<UplistData>,
-    JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
-);
+pub struct Uplist {
+    data: Arc<UplistData>,
+    handle: JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
+}
 
 impl Uplist {
     #[allow(clippy::too_many_arguments)]
@@ -45,7 +46,7 @@ impl Uplist {
         game_map: &str,
         created_by: &str,
         private_ip: &str,
-        game_status:&str,
+        game_status: &str,
     ) -> Self {
         let token = thread_rng()
             .sample_iter(&Alphanumeric)
@@ -67,10 +68,12 @@ impl Uplist {
             created_by: created_by.to_string(),
             private_ip: private_ip.to_string(),
             game_map: game_map.to_string(),
-            game_status:game_status.to_string()
+            game_status: game_status.to_string(),
         });
-
-        Uplist(uplist_data.clone(), tokio::spawn(uplist_fn(uplist_data)))
+        Uplist {
+            data: uplist_data.clone(),
+            handle: tokio::spawn(uplist_fn(uplist_data)),
+        }
     }
 }
 
@@ -80,20 +83,17 @@ async fn uplist_fn(
     let mut client = reqwest::Client::new();
     uplist_add(&mut client, &uplist_data).await?;
 
-
     let update_body = format!("action=update&id={}&private_token={}&password_required={}&created_by={}&private_ip=10.0.0.1&port_number={}&game_map={}&game_mode=skirmishMap&game_status={}&player_count={}&max_player_count={}",uplist_data.server_uuid,uplist_data.token,uplist_data.passwd,uplist_data.created_by,uplist_data.port,uplist_data.game_map,uplist_data.game_status,uplist_data.player_size,uplist_data.player_max_size);
 
-
-
     loop {
-        uplist_update(&mut client,&update_body).await?;
+        uplist_update(&mut client, &update_body).await?;
         std::thread::sleep(std::time::Duration::from_secs(5));
     }
 }
 
 async fn uplist_add(
     client: &mut Client,
-    uplist_data:&Arc<UplistData>,
+    uplist_data: &Arc<UplistData>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let add_body = format!("action=add&user_id={}&game_name={}&_1={}&tx2={}&tx3={}&game_version=151&game_version_string=1.14&game_version_beta=false&private_token={}&private_token_2={}&confirm={}&password_required={}&created_by={}&private_ip={}&port_number={}&game_map={}&game_mode=skirmishMap&game_status=battleroom&player_count={}&max_player_count={}", 
     uplist_data.server_uuid,uplist_data.game_name,uplist_data.time,
@@ -112,15 +112,23 @@ async fn uplist_add(
     );
 
     for url in UPLIST_URL {
-        match client.post(url).timeout(Duration::from_secs(1)).body(add_body.clone()).send().await {
-            Ok(_) => {     
-            info!("uplist add 从{}添加列表成功", url);
-            },
-            Err(e) => {if e.is_timeout() {
-                continue;
-            }else {
-                return Err(Box::new(e));
-            }},
+        match client
+            .post(url)
+            .timeout(Duration::from_secs(1))
+            .body(add_body.clone())
+            .send()
+            .await
+        {
+            Ok(_) => {
+                info!("uplist add 从{}添加列表成功", url);
+            }
+            Err(e) => {
+                if e.is_timeout() {
+                    continue;
+                } else {
+                    return Err(Box::new(e));
+                }
+            }
         }
     }
     Ok(())
@@ -128,16 +136,24 @@ async fn uplist_add(
 
 async fn uplist_update(
     client: &mut Client,
-    update_body:&str
+    update_body: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for url in UPLIST_URL {
-        match client.post(url).timeout(Duration::from_secs(1)).body(update_body.to_string()).send().await {
-            Ok(_) => {},
-            Err(e) => {if e.is_timeout() {
-                continue;
-            }else {
-                return Err(Box::new(e));
-            }},
+        match client
+            .post(url)
+            .timeout(Duration::from_secs(1))
+            .body(update_body.to_string())
+            .send()
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                if e.is_timeout() {
+                    continue;
+                } else {
+                    return Err(Box::new(e));
+                }
+            }
         }
     }
     Ok(())

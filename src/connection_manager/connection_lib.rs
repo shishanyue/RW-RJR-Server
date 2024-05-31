@@ -35,22 +35,12 @@ impl ConnectionLib {
     pub async fn send_packet_to_player_by(&self, by: By, packet: Packet) {
         match by {
             By::Addr(addr) => {
-                println!("len:{}",self.addr_map.len());
                 for (con_addr,con) in self.addr_map.iter() {
-                    println!("con_addr:{},addr:{}",con_addr,addr);
-                    println!("con_addr_len:{},addr_len:{}",con_addr.len(),addr.len());
-
                     dbg!(*con_addr == addr);
                     if *con_addr == addr{
                         con.send_packet(packet.clone()).await;
                     }
                 }
-                /*
-                                if let Some(con) = self.addr_map.get(&addr) {
-                    con.send_packet(packet.clone()).await;
-                }
-                 */
-
             }
             By::Name(_) => todo!(),
         }

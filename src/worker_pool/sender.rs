@@ -1,9 +1,9 @@
-use std::sync::{atomic::{AtomicI64, AtomicU32, Ordering}, Arc};
+use std::sync::{atomic::{AtomicI64, Ordering}, Arc};
 
 use tokio::{
     io::AsyncWriteExt,
     net::tcp::OwnedWriteHalf,
-    sync::{broadcast, mpsc, SemaphorePermit},
+    sync::{broadcast},
 };
 
 use crate::{
@@ -33,7 +33,6 @@ pub async fn sender(
                                 Ok(mut packet) => {
 
                                     packet.prepare().await;
-                                    //println!("PermissionStatus:{:?}SendPacket:{:?}\n",shared_con.shared_data.player_info.permission_status.read(),packet);
 
                                     match write_half
                                     .write_all(&packet.packet_buffer.into_inner())

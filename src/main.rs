@@ -24,11 +24,11 @@ lazy_static! {
 
 use std::{
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Instant},
 };
 
 use crate::{
-    connection_manager::By, data::START_INFO, event::init_event_system, packet::super_packet::SuperPacket, server::config::*, uplist::Uplist
+    data::START_INFO, event::init_event_system, server::config::*
 };
 
 use connection_manager::ConnectionManager;
@@ -72,18 +72,6 @@ async fn main() {
             init_event_system().expect("event system init error");
 
             let shared_connection_mg = start_server(res.server).await.expect("start server error");
-
-            let _uplsit = Uplist::new(
-                "",
-                "RW-RJR",
-                5123,
-                0,
-                100,
-                "RW-RJR",
-                "shishanyue",
-                "192.168.0.1",
-                "开了",
-            );
 
             command_center(shared_connection_mg).await;
         }

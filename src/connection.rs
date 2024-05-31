@@ -11,7 +11,6 @@ use std::{
     },
 };
 
-use log::warn;
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     runtime::Runtime,
@@ -25,7 +24,7 @@ use crate::{
     event::{Event, EventType, EVENT_CHANNEL},
     packet::{Packet, PacketReadWriteExt, PacketType},
     relay_manager::{relay::SharedRelayRoom, SharedRelayManager},
-    worker_pool::{processor::ProcesseorData, receiver::ReceiverData, sender::SenderData},
+    worker_pool::{processor::ProcesseorData},
 };
 
 use self::{

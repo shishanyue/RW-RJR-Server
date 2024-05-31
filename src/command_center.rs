@@ -1,29 +1,32 @@
-use std::{sync::Arc, time::Duration};
+use std::{io::Read, sync::Arc};
 
-use log::{info, warn};
 
 use crate::{
-    connection_manager::{By, ConnectionManager},
-    event::{self, EventType, EVENT_CHANNEL_MULTIPLE},
-    module::{ModuleType, MODULE_MANAGER},
-    packet::{self, super_packet::SuperPacket, PacketReadWriteExt, PacketType},
+    connection_manager::{ConnectionManager}, event::{EVENT_CHANNEL_MULTIPLE}
 };
 
 pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
-    let mut event_receiver = EVENT_CHANNEL_MULTIPLE.1.resubscribe();
+    let event_receiver = EVENT_CHANNEL_MULTIPLE.1.resubscribe();
 
     //MODULE_MANAGER
     //    .write()
     //    .unwrap()
     //    .init_module(ModuleType::RwEngine);
 
-    let std_in = std::io::stdin();
+    let mut std_in = std::io::stdin();
     let mut admin_command = String::new();
 
-    std_in.read_line(&mut admin_command).unwrap();
-    let admin_command = admin_command.trim().to_string();
-    println!("Ok");
+    
     loop {
+        std_in.read_to_string(&mut admin_command).unwrap();
+
+
+
+        admin_command.clear();
+    }
+
+    //loop {
+        /*
         match event_receiver.recv().await {
             Ok(event) => match event.event_type {
                 EventType::NewPacket(_, mut packet, PacketType::CHAT_RECEIVE) => {
@@ -40,12 +43,15 @@ pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
                     }
 
                 }
-                EventType::NewPacket(_, mut packet, PacketType::CHAT) => {
+                EventType::NewPacket(_, packet, PacketType::CHAT) => {
                 }
                 _ => {}
             },
             Err(e) => panic!("{}", e),
         };
+        
+         */
+        
 
         /*
         std_in.read_line(&mut admin_command).unwrap();
@@ -67,6 +73,6 @@ pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
                 .await;
         }
          */
-    }
+    //}
     //std::thread::sleep(Duration::from_millis(u64::MAX));
 }
