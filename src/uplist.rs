@@ -1,6 +1,5 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::{Duration, SystemTime}};
 
-use chrono::{Timelike, Utc};
 use log::info;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use reqwest::{
@@ -14,16 +13,13 @@ use uuid::Uuid;
 
 type Token = String;
 type ServerUuid = String;
-static UPLIST_URL: [&str; 1] = [
-    "http://gs1.corrodinggames.com/masterserver/1.4/interface",
-];
-
+static UPLIST_URL: [&str; 1] = ["http://gs1.corrodinggames.com/masterserver/1.4/interface"];
 
 #[derive(Clone)]
 pub struct UplistData {
     server_uuid: ServerUuid,
     game_name: String,
-    time: u32,
+    time: u128,
     token: Token,
     passwd: String,
     port: usize,
@@ -59,13 +55,16 @@ impl Uplist {
             .map(char::from)
             .collect();
 
-        let now = Utc::now();
+        let current_time = SystemTime::now();
+        let since_epoch = current_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards");
 
         let uplist_data = Arc::new(UplistData {
             server_uuid: format!("u_{}", Uuid::new_v4()),
             token,
             game_name: game_name.to_string(),
-            time: now.second(),
+            time: since_epoch.as_millis(),
             passwd: passwd.to_string(),
             player_max_size,
             player_size,
@@ -96,14 +95,13 @@ async fn uplist_fn(
 
     let mut client = reqwest::Client::new();
 
-    uplist_add(&mut client, &uplist_data,&headers).await?;
+    uplist_add(&mut client, &uplist_data, &headers).await?;
 
-    let update_body = format!("action=update&id={}&private_token={}&password_required={}&created_by={}&private_ip=10.0.0.1&port_number={}&game_map={}&game_mode=skirmishMap&game_status={}&player_count={}&max_player_count={}",uplist_data.server_uuid,uplist_data.token,uplist_data.passwd,uplist_data.created_by,uplist_data.port,uplist_data.game_map,uplist_data.game_status,uplist_data.player_size,uplist_data.player_max_size);
+    let update_body = format!("action=update&id={}&private_token={}&password_required={}&created_by={}&private_ip=34.92.10.132&port_number={}&game_map={}&game_mode=skirmishMap&game_status={}&player_count={}&max_player_count={}",uplist_data.server_uuid,uplist_data.token,uplist_data.passwd,uplist_data.created_by,uplist_data.port,uplist_data.game_map,uplist_data.game_status,uplist_data.player_size,uplist_data.player_max_size);
 
     info!("update_body:\n{}", update_body);
-
     loop {
-        uplist_update(&mut client, &update_body,&headers).await?;
+        uplist_update(&mut client, &update_body, &headers).await?;
         std::thread::sleep(std::time::Duration::from_secs(3));
     }
 }
@@ -111,12 +109,12 @@ async fn uplist_fn(
 async fn uplist_add(
     client: &mut Client,
     uplist_data: &Arc<UplistData>,
-    headers:&HeaderMap
+    headers: &HeaderMap,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let add_body = format!("action=add&user_id={}&game_name={}&_1={}&tx2={}&tx3={}&game_version=151&game_version_string=1.14&game_version_beta=false&private_token={}&private_token_2={}&confirm={}&password_required={}&created_by={}&private_ip={}&port_number={}&game_map={}&game_mode=skirmishMap&game_status=battleroom&player_count={}&max_player_count={}", 
+    let add_body = format!("action=add&user_id={}&game_name={}&_1={}&tx2={}&tx3={}&game_version=176&game_version_string=1.15-Othe&game_version_beta=false&private_token={}&private_token_2={}&confirm={}&password_required={}&created_by={}&private_ip={}&port_number={}&game_map={}&game_mode=skirmishMap&game_status=battleroom&player_count={}&max_player_count={}", 
     uplist_data.server_uuid,uplist_data.game_name,uplist_data.time,
-    format!("{:x}",md5::compute(&sha256::digest(format!("SHA256_{}",&uplist_data.server_uuid[..=5]))[..=4])).to_ascii_uppercase(),
-    format!("{:x}",md5::compute(&sha256::digest(format!("SHA256_{}{}",&uplist_data.server_uuid[..=5],uplist_data.time))[..=4])).to_ascii_uppercase(),
+    &format!("{:x}",md5::compute(&sha256::digest(format!("SHA256_{}",&uplist_data.server_uuid[..=5]))[..=4])).to_ascii_uppercase()[0..4],
+    &format!("{:x}",md5::compute(&sha256::digest(format!("SHA256_{}{}",&uplist_data.server_uuid[..=5],uplist_data.time))[..=4])).to_ascii_uppercase()[0..4],
     uplist_data.token,
     format_args!("{:x}",md5::compute(md5::compute(&uplist_data.token).0)),
     format_args!("{:x}",md5::compute(format!("a{:x}",&md5::compute(&uplist_data.token)))),
@@ -129,6 +127,7 @@ async fn uplist_add(
     uplist_data.player_max_size
     );
     info!("add_body:\n{}", add_body);
+    
     /*
 
     'Content-Type': 'application/x-www-form-urlencoded',
@@ -138,10 +137,15 @@ async fn uplist_add(
             'Host': 'gs1.corrodinggames.net',
             'Connection': 'Keep-Alive'
      */
-    
+
     for url in UPLIST_URL {
         let mut headers = headers.clone();
-        headers.append(HOST, url.parse().unwrap());
+        
+        headers.append(HOST, "gs1.corrodinggames.net".parse().unwrap());
+        headers.append("Language", "zh".parse().unwrap());
+        headers.append(CONTENT_LENGTH, add_body.len().to_string().parse().unwrap());
+
+        info!("add_header:{:?}",headers);
         match client
             .post(url)
             .headers(headers)
@@ -151,7 +155,11 @@ async fn uplist_add(
             .await
         {
             Ok(res) => {
-                info!("uplist add response:\n{}", res.text().await?);
+                info!(
+                    "uplist add status:{} response:\n{}",
+                    res.status(),
+                    res.text().await?
+                );
             }
             Err(e) => {
                 if e.is_timeout() {
@@ -169,11 +177,15 @@ async fn uplist_add(
 async fn uplist_update(
     client: &mut Client,
     update_body: &str,
-    headers:&HeaderMap
+    headers: &HeaderMap,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for url in UPLIST_URL {
         let mut headers = headers.clone();
         headers.append(HOST, url.parse().unwrap());
+        headers.append(
+            CONTENT_LENGTH,
+            update_body.len().to_string().parse().unwrap(),
+        );
         match client
             .post(url)
             .headers(headers)
@@ -183,7 +195,11 @@ async fn uplist_update(
             .await
         {
             Ok(res) => {
-                info!("uplist update response:\n{}", res.text().await?);
+                info!(
+                    "uplist update status:{} response:\n{}",
+                    res.status(),
+                    res.text().await?
+                );
             }
             Err(e) => {
                 if e.is_timeout() {

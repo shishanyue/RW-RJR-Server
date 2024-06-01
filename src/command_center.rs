@@ -8,14 +8,14 @@ use crate::{
 pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
     let event_receiver = EVENT_CHANNEL_MULTIPLE.1.resubscribe();
     let _uplsit = Uplist::new(
-        "",
+        "false",
         "RW-RJR",
         5123,
         0,
         100,
         "RW-RJR",
         "shishanyue",
-        "192.168.0.1",
+        "127.0.0.1",
         "开了",
     );
     //MODULE_MANAGER
