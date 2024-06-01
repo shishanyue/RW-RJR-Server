@@ -93,6 +93,7 @@ async fn uplist_fn(
     headers.append(USER_AGENT, "rw android 176 zh".parse().unwrap());
     headers.append(CONNECTION, "Keep-Alive".parse().unwrap());
 
+    headers.append("Language", "zh".parse().unwrap());
     let mut client = reqwest::Client::new();
 
     uplist_add(&mut client, &uplist_data, &headers).await?;
@@ -142,7 +143,6 @@ async fn uplist_add(
         let mut headers = headers.clone();
         
         headers.append(HOST, "gs1.corrodinggames.net".parse().unwrap());
-        headers.append("Language", "zh".parse().unwrap());
         headers.append(CONTENT_LENGTH, add_body.len().to_string().parse().unwrap());
 
         info!("add_header:{:?}",headers);

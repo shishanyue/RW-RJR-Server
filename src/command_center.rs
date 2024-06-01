@@ -9,7 +9,7 @@ pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
     let event_receiver = EVENT_CHANNEL_MULTIPLE.1.resubscribe();
     let _uplsit = Uplist::new(
         "false",
-        "RW-RJR",
+        "RW-Relay-RJR",
         5123,
         0,
         100,
