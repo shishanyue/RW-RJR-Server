@@ -1,19 +1,24 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use chrono::{Timelike, Utc};
 use log::info;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use reqwest::Client;
+use reqwest::{
+    header::{
+        HeaderMap, CONNECTION, CONTENT_LANGUAGE, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT,
+    },
+    Client,
+};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-
 type Token = String;
 type ServerUuid = String;
-static UPLIST_URL: [&str; 2] = [
+static UPLIST_URL: [&str; 1] = [
     "http://gs1.corrodinggames.com/masterserver/1.4/interface",
-    "http://gs4.corrodinggames.com/masterserver/1.4/interface",
 ];
+
+
 #[derive(Clone)]
 pub struct UplistData {
     server_uuid: ServerUuid,
@@ -80,20 +85,33 @@ impl Uplist {
 async fn uplist_fn(
     uplist_data: Arc<UplistData>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut headers = HeaderMap::new();
+
+    headers.append(
+        CONTENT_TYPE,
+        "application/x-www-form-urlencoded".parse().unwrap(),
+    );
+    headers.append(USER_AGENT, "rw android 176 zh".parse().unwrap());
+    headers.append(CONNECTION, "Keep-Alive".parse().unwrap());
+
     let mut client = reqwest::Client::new();
-    uplist_add(&mut client, &uplist_data).await?;
+
+    uplist_add(&mut client, &uplist_data,&headers).await?;
 
     let update_body = format!("action=update&id={}&private_token={}&password_required={}&created_by={}&private_ip=10.0.0.1&port_number={}&game_map={}&game_mode=skirmishMap&game_status={}&player_count={}&max_player_count={}",uplist_data.server_uuid,uplist_data.token,uplist_data.passwd,uplist_data.created_by,uplist_data.port,uplist_data.game_map,uplist_data.game_status,uplist_data.player_size,uplist_data.player_max_size);
 
+    info!("update_body:\n{}", update_body);
+
     loop {
-        uplist_update(&mut client, &update_body).await?;
-        std::thread::sleep(std::time::Duration::from_secs(5));
+        uplist_update(&mut client, &update_body,&headers).await?;
+        std::thread::sleep(std::time::Duration::from_secs(3));
     }
 }
 
 async fn uplist_add(
     client: &mut Client,
     uplist_data: &Arc<UplistData>,
+    headers:&HeaderMap
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let add_body = format!("action=add&user_id={}&game_name={}&_1={}&tx2={}&tx3={}&game_version=151&game_version_string=1.14&game_version_beta=false&private_token={}&private_token_2={}&confirm={}&password_required={}&created_by={}&private_ip={}&port_number={}&game_map={}&game_mode=skirmishMap&game_status=battleroom&player_count={}&max_player_count={}", 
     uplist_data.server_uuid,uplist_data.game_name,uplist_data.time,
@@ -110,20 +128,34 @@ async fn uplist_add(
     uplist_data.player_size,
     uplist_data.player_max_size
     );
+    info!("add_body:\n{}", add_body);
+    /*
 
+    'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'rw android 176 zh',
+            'Language': 'zh',
+            'Content-Length': contentLengthAdd,
+            'Host': 'gs1.corrodinggames.net',
+            'Connection': 'Keep-Alive'
+     */
+    
     for url in UPLIST_URL {
+        let mut headers = headers.clone();
+        headers.append(HOST, url.parse().unwrap());
         match client
             .post(url)
+            .headers(headers)
             .timeout(Duration::from_secs(1))
             .body(add_body.clone())
             .send()
             .await
         {
-            Ok(_) => {
-                info!("uplist add 从{}添加列表成功", url);
+            Ok(res) => {
+                info!("uplist add response:\n{}", res.text().await?);
             }
             Err(e) => {
                 if e.is_timeout() {
+                    info!("{} timeout", url);
                     continue;
                 } else {
                     return Err(Box::new(e));
@@ -137,18 +169,25 @@ async fn uplist_add(
 async fn uplist_update(
     client: &mut Client,
     update_body: &str,
+    headers:&HeaderMap
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for url in UPLIST_URL {
+        let mut headers = headers.clone();
+        headers.append(HOST, url.parse().unwrap());
         match client
             .post(url)
+            .headers(headers)
             .timeout(Duration::from_secs(1))
             .body(update_body.to_string())
             .send()
             .await
         {
-            Ok(_) => {}
+            Ok(res) => {
+                info!("uplist update response:\n{}", res.text().await?);
+            }
             Err(e) => {
                 if e.is_timeout() {
+                    info!("{} timeout", url);
                     continue;
                 } else {
                     return Err(Box::new(e));
