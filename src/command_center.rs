@@ -11,11 +11,11 @@ pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
         "false",
         "RW-Relay-RJR",
         5123,
-        0,
+        1,
         100,
         "RW-RJR",
         "shishanyue",
-        "127.0.0.1",
+        "192.168.80.1",
         "开了",
     );
     //MODULE_MANAGER

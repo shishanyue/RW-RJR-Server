@@ -30,7 +30,7 @@ image = "0.25.1"
 bracket-color = "0.8.7"
 md5 = "0.7.0"
 async-trait = "0.1.80"
-
+url = "2.5.0"
 
 [dependencies.uuid]
 version = "1.8.0"

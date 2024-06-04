@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::{Duration, SystemTime}};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use log::info;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -9,11 +13,15 @@ use reqwest::{
     Client,
 };
 use tokio::task::JoinHandle;
+use url::Url;
 use uuid::Uuid;
 
 type Token = String;
 type ServerUuid = String;
-static UPLIST_URL: [&str; 1] = ["http://gs1.corrodinggames.com/masterserver/1.4/interface"];
+static UPLIST_URL: [&str; 2] = [
+    "http://gs1.corrodinggames.com/masterserver/1.4/interface",
+    "http://gs4.corrodinggames.net/masterserver/1.4/interface",
+];
 
 #[derive(Clone)]
 pub struct UplistData {
@@ -128,24 +136,24 @@ async fn uplist_add(
     uplist_data.player_max_size
     );
     info!("add_body:\n{}", add_body);
-    
-    /*
 
-    'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'rw android 176 zh',
-            'Language': 'zh',
-            'Content-Length': contentLengthAdd,
-            'Host': 'gs1.corrodinggames.net',
-            'Connection': 'Keep-Alive'
-     */
-
+    //"add": "action=add&user_id=u_f8b4da13-88f8-9f00-5a0c-050536fc61b5&game_name=RW-HPS&_1=1710340893029&tx2=A7CA&tx3=8142&game_version={RW-HPS.RW.VERSION.INT}&game_version_string={RW-HPS.RW.VERSION}&game_version_beta={RW-HPS.RW.IS.VERSION}&private_token=rs67nMZSgL8czc3uCQ7riylkpSKkUzbl7GqEjEbo&private_token_2=a16d57a220efb3edcfcca5111729226a&confirm=f112b4b91e2d2444f7302066a79bee8e&password_required={RW-HPS.RW.IS.PASSWD}&created_by={RW-HPS.S.NAME}&private_ip={RW-HPS.S.PRIVATE.IP}&port_number={RW-HPS.S.PORT}&game_map={RW-HPS.RW.MAP.NAME}&game_mode=skirmishMap&game_status=battleroom&player_count={RW-HPS.PLAYER.SIZE}&max_player_count={RW-HPS.PLAYER.SIZE.MAX}",
+    //        action=add&user_id=u_c4c45cbf-365c-4de4-8371-2dbf33db72d4&game_name=RW-Rel&_1=1717478030713&tx2=4CA2&tx3=A592&game_version={RW-HPS.RW.VERSION.INT}&game_version_string={RW-HPS.RW.VERSION}&game_version_beta={RW-HPS.RW.IS.VERSION}&private_token=tnYXSxsIF1MvW4F9ZPW7ktPJAFWC0AccfnJW7p8D&private_token_2=49ad6c7f75d652d108d01e9305741ab9&confirm=c448570288a77aeb66beea9141166c7d&password_required={RW-HPS.RW.IS.PASSWD}&created_by={RW-HPS.S.NAME}&private_ip={RW-HPS.S.PRIVATE.IP}&port_number={RW-HPS.S.PORT}&game_map={RW-HPS.RW.MAP.NAME}-RJR&game_mode=skirmishMap&game_status=battleroom&player_count=0&max_player_count=100
     for url in UPLIST_URL {
         let mut headers = headers.clone();
-        
-        headers.append(HOST, "gs1.corrodinggames.net".parse().unwrap());
+
+        headers.append(
+            HOST,
+            Url::parse(url)?
+                .host()
+                .unwrap()
+                .to_string()
+                .parse()
+                .unwrap(),
+        );
         headers.append(CONTENT_LENGTH, add_body.len().to_string().parse().unwrap());
 
-        info!("add_header:{:?}",headers);
+        info!("add_header:{:?}", headers);
         match client
             .post(url)
             .headers(headers)
@@ -181,7 +189,15 @@ async fn uplist_update(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for url in UPLIST_URL {
         let mut headers = headers.clone();
-        headers.append(HOST, url.parse().unwrap());
+        headers.append(
+            HOST,
+            Url::parse(url)?
+                .host()
+                .unwrap()
+                .to_string()
+                .parse()
+                .unwrap(),
+        );
         headers.append(
             CONTENT_LENGTH,
             update_body.len().to_string().parse().unwrap(),
