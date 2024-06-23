@@ -2,10 +2,10 @@ name: check
 on:
   push:
     branches:
-      - master
+      - Base
   pull_request:
     branches:
-      - master
+      - Base
   workflow_dispatch:
 
 jobs:

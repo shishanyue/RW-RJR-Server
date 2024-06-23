@@ -22,7 +22,7 @@ lazy_static! {
 
 use std::{
     sync::Arc,
-    time::{Instant},
+    time::Instant,
 };
 
 use crate::{
