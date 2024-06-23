@@ -25,9 +25,6 @@ pub async fn command_center(shared_connection_mg: Arc<ConnectionManager>) {
     
     loop {
         std_in.read_to_string(&mut admin_command).unwrap();
-
-
-
         admin_command.clear();
     }
 

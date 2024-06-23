@@ -25,10 +25,11 @@ pub struct ConnectionManager {
     new_con_tx: Option<mpsc::Sender<NewConnectionData>>,
     handle_vec: Vec<JoinHandle<()>>,
     runtime: Option<Arc<Runtime>>,
-    connection_runtime: Option<Runtime>,
+    _connection_runtime: Option<Runtime>,
     shared_relay_mg: Arc<SharedRelayManager>,
     pub con_lib_api_tx: Option<mpsc::Sender<ConnectionLibAPI>>,
 }
+
 
 #[derive(Debug)]
 pub enum By {
@@ -240,7 +241,7 @@ impl ConnectionManager {
                     .await
                     .expect("connection manager runtime create error!"),
             )),
-            connection_runtime: Some(
+            _connection_runtime: Some(
                 creat_block_runtime(con_thread_number)
                     .await
                     .expect("connection runtime create error!"),

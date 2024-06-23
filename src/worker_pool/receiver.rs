@@ -9,7 +9,7 @@ use crate::core::ServerCommand;
 use crate::error::ReceiverError;
 use crate::packet::{Packet, PacketType};
 
-use tokio::sync::{broadcast};
+use tokio::sync::broadcast;
 
 use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 

@@ -18,8 +18,6 @@ impl ConnectionLib {
     }
 
     pub fn insert(&mut self, shared_con: Arc<SharedConnection>) {
-        
-
         self.addr_map.insert(
             shared_con
                 .shared_data
