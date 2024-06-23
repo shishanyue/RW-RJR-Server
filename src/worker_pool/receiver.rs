@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::{sync::Arc, usize};
+use std::sync::Arc;
 
 use crate::connection::shared_connection::SharedConnection;
 
