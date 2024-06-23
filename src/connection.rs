@@ -21,10 +21,9 @@ use uuid::Uuid;
 use crate::{
     connection_manager::By,
     core::ServerCommand,
-    event::{Event, EventType, EVENT_CHANNEL},
     packet::{Packet, PacketReadWriteExt, PacketType},
     relay_manager::{relay::SharedRelayRoom, SharedRelayManager},
-    worker_pool::{processor::ProcesseorData},
+    worker_pool::processor::ProcesseorData,
 };
 
 use self::{
@@ -487,14 +486,6 @@ impl Connection {
         }
 
         self.shared_con.as_ref().unwrap().send_packet(packet).await;
-
-        EVENT_CHANNEL
-            .0
-            .send(Event::new(
-                "abab",
-                EventType::NewRoomAndHostOk(self.shared_relay_room.as_ref().unwrap().clone()),
-            ))
-            .await.expect("send event error");
     }
 
     pub async fn disconnect(&mut self) {

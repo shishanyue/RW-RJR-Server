@@ -29,5 +29,3 @@ impl CustomRelayData {
         }
     }
 }
-
-//(u32,bool,Option<String>,Option<String>);

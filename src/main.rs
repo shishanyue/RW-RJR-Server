@@ -12,9 +12,7 @@ mod server;
 mod uplist;
 mod worker_pool;
 mod command_center;
-mod dummy;
-mod module;
-mod event;
+
 
 
 
@@ -28,7 +26,7 @@ use std::{
 };
 
 use crate::{
-    data::START_INFO, event::init_event_system, server::config::*
+    data::START_INFO, server::config::*
 };
 
 use connection_manager::ConnectionManager;
@@ -68,8 +66,6 @@ async fn main() {
             println!("{}", START_INFO);
             info!("加载中.....");
             info!("将从如下配置启动\n{}", res);
-
-            init_event_system().expect("event system init error");
 
             let shared_connection_mg = start_server(res.server).await.expect("start server error");
 

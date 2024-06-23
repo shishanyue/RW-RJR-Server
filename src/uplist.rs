@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -8,7 +7,7 @@ use log::info;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use reqwest::{
     header::{
-        HeaderMap, CONNECTION, CONTENT_LANGUAGE, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT,
+        HeaderMap, CONNECTION, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT,
     },
     Client,
 };
